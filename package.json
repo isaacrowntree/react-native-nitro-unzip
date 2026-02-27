@@ -72,9 +72,12 @@
     "react-native-nitro-modules": ">=0.34.0"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.29.0",
+    "@babel/preset-typescript": "^7.28.5",
     "@react-native/eslint-config": "^0.75.0",
     "@release-it/conventional-changelog": "^10.0.0",
     "@types/jest": "^29.5.0",
+    "babel-jest": "^30.2.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.0.0",
@@ -105,7 +108,24 @@
     "useTabs": false
   },
   "jest": {
-    "preset": "react-native",
+    "transform": {
+      "^.+\\.tsx?$": [
+        "babel-jest",
+        {
+          "presets": [
+            [
+              "@babel/preset-env",
+              {
+                "targets": {
+                  "node": "current"
+                }
+              }
+            ],
+            "@babel/preset-typescript"
+          ]
+        }
+      ]
+    },
     "modulePathIgnorePatterns": [
       "<rootDir>/example/",
       "<rootDir>/lib/"
