@@ -26,8 +26,6 @@ class HybridZipTask(
   private val password: String? = null
 ) : HybridZipTaskSpec() {
 
-  override val memorySize: Long = 0L
-
   override val taskId: String = "zip_${System.nanoTime()}_${(Math.random() * 1e9).toLong()}"
 
   private var progressCallback: ((ZipProgress) -> Unit)? = null

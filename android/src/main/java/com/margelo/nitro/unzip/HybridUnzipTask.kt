@@ -29,8 +29,6 @@ class HybridUnzipTask(
   private val password: String? = null
 ) : HybridUnzipTaskSpec() {
 
-  override val memorySize: Long = 0L
-
   override val taskId: String = "unzip_${System.nanoTime()}_${(Math.random() * 1e9).toLong()}"
 
   private var progressCallback: ((UnzipProgress) -> Unit)? = null

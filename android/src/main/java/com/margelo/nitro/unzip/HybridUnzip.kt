@@ -9,8 +9,6 @@ import com.facebook.proguard.annotations.DoNotStrip
 @DoNotStrip
 @Keep
 class HybridUnzip : HybridUnzipSpec() {
-  override val memorySize: Long = 0L
-
   override fun extract(zipPath: String, destinationPath: String): HybridUnzipTaskSpec {
     return HybridUnzipTask(zipPath, destinationPath)
   }

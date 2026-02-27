@@ -30,6 +30,7 @@ android {
     externalNativeBuild {
       cmake {
         cppFlags "-O2 -frtti -fexceptions -Wall -fstack-protector-all"
+        arguments "-DANDROID_STL=c++_shared"
         abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
       }
     }
@@ -41,6 +42,29 @@ android {
   }
   kotlinOptions {
     jvmTarget = '17'
+  }
+
+  packagingOptions {
+    excludes = [
+      "META-INF",
+      "META-INF/**",
+      "**/libNitroModules.so",
+      "**/libc++_shared.so",
+      "**/libfbjni.so",
+      "**/libjsi.so",
+      "**/libfolly_json.so",
+      "**/libfolly_runtime.so",
+      "**/libglog.so",
+      "**/libhermes.so",
+      "**/libreactnative.so",
+      "**/libreactnativejni.so",
+      "**/libturbomodulejsijni.so",
+      "**/libreact_nativemodule_core.so",
+    ]
+  }
+
+  buildFeatures {
+    prefab true
   }
 
   sourceSets {
@@ -64,6 +88,7 @@ repositories {
 dependencies {
   implementation "com.facebook.react:react-android:+"
   implementation "com.facebook.react:react-native:+"
+  implementation project(":react-native-nitro-modules")
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3"
   // zip4j — needed for password-protected zip/unzip (java.util.zip has no password API)
   implementation "net.lingala.zip4j:zip4j:2.11.5"
