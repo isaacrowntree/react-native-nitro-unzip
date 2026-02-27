@@ -23,28 +23,4 @@ public final class NitroUnzipAutolinking {
   public static func isUnzipRecyclable() -> Bool {
     return HybridUnzip.self is any RecyclableView.Type
   }
-  
-  public static func createUnzipTask() -> bridge.std__shared_ptr_HybridUnzipTaskSpec_ {
-    let hybridObject = HybridUnzipTask()
-    return { () -> bridge.std__shared_ptr_HybridUnzipTaskSpec_ in
-      let __cxxWrapped = hybridObject.getCxxWrapper()
-      return __cxxWrapped.getCxxPart()
-    }()
-  }
-  
-  public static func isUnzipTaskRecyclable() -> Bool {
-    return HybridUnzipTask.self is any RecyclableView.Type
-  }
-  
-  public static func createZipTask() -> bridge.std__shared_ptr_HybridZipTaskSpec_ {
-    let hybridObject = HybridZipTask()
-    return { () -> bridge.std__shared_ptr_HybridZipTaskSpec_ in
-      let __cxxWrapped = hybridObject.getCxxWrapper()
-      return __cxxWrapped.getCxxPart()
-    }()
-  }
-  
-  public static func isZipTaskRecyclable() -> Bool {
-    return HybridZipTask.self is any RecyclableView.Type
-  }
 }

@@ -12,14 +12,6 @@
     "Unzip": {
       "swift": "HybridUnzip",
       "kotlin": "HybridUnzip"
-    },
-    "UnzipTask": {
-      "swift": "HybridUnzipTask",
-      "kotlin": "HybridUnzipTask"
-    },
-    "ZipTask": {
-      "swift": "HybridZipTask",
-      "kotlin": "HybridZipTask"
     }
   },
   "ignorePaths": ["node_modules", "lib", "example"]

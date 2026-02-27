@@ -50,22 +50,6 @@ void registerAllNatives() {
       return instance->cthis()->shared();
     }
   );
-  HybridObjectRegistry::registerHybridObjectConstructor(
-    "UnzipTask",
-    []() -> std::shared_ptr<HybridObject> {
-      static DefaultConstructableObject<JHybridUnzipTaskSpec::javaobject> object("com/margelo/nitro/unzip/HybridUnzipTask");
-      auto instance = object.create();
-      return instance->cthis()->shared();
-    }
-  );
-  HybridObjectRegistry::registerHybridObjectConstructor(
-    "ZipTask",
-    []() -> std::shared_ptr<HybridObject> {
-      static DefaultConstructableObject<JHybridZipTaskSpec::javaobject> object("com/margelo/nitro/unzip/HybridZipTask");
-      auto instance = object.create();
-      return instance->cthis()->shared();
-    }
-  );
 }
 
 } // namespace margelo::nitro::unzip

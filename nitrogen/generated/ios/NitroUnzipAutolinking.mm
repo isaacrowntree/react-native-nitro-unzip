@@ -11,8 +11,6 @@
 #import <type_traits>
 
 #include "HybridUnzipSpecSwift.hpp"
-#include "HybridUnzipTaskSpecSwift.hpp"
-#include "HybridZipTaskSpecSwift.hpp"
 
 @interface NitroUnzipAutolinking : NSObject
 @end
@@ -27,20 +25,6 @@
     "Unzip",
     []() -> std::shared_ptr<HybridObject> {
       std::shared_ptr<HybridUnzipSpec> hybridObject = NitroUnzip::NitroUnzipAutolinking::createUnzip();
-      return hybridObject;
-    }
-  );
-  HybridObjectRegistry::registerHybridObjectConstructor(
-    "UnzipTask",
-    []() -> std::shared_ptr<HybridObject> {
-      std::shared_ptr<HybridUnzipTaskSpec> hybridObject = NitroUnzip::NitroUnzipAutolinking::createUnzipTask();
-      return hybridObject;
-    }
-  );
-  HybridObjectRegistry::registerHybridObjectConstructor(
-    "ZipTask",
-    []() -> std::shared_ptr<HybridObject> {
-      std::shared_ptr<HybridZipTaskSpec> hybridObject = NitroUnzip::NitroUnzipAutolinking::createZipTask();
       return hybridObject;
     }
   );
