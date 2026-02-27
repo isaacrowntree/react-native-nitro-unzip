@@ -12,6 +12,7 @@ Pod::Spec.new do |s|
   s.source       = { git: package['repository']['url'], tag: s.version.to_s }
   s.platforms    = { ios: '13.0' }
   s.swift_version = '5.9'
+  s.module_name  = 'NitroUnzip'
 
   s.source_files = 'ios/**/*.{h,m,mm,swift,hpp,cpp}'
 
