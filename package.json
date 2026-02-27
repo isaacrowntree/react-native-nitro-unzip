@@ -1,6 +1,6 @@
 {
   "name": "react-native-nitro-unzip",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "High-performance ZIP extraction for React Native, powered by Nitro Modules",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
@@ -28,7 +28,8 @@
     "!**/__fixtures__",
     "!**/__mocks__",
     "!ios/build",
-    "!android/build"
+    "!android/build",
+    "!android/.cxx"
   ],
   "scripts": {
     "nitrogen": "nitrogen",

@@ -1,9 +1,8 @@
-// Workaround for Android prefab + CMake discovery of sibling project .so files.
-// Ensures that when react-native-nitro-modules is built as a local project dependency,
-// its prefab_config.json is regenerated to include the .so file (not just headers).
-// See: https://cs.android.com/android-studio/platform/tools/base/+/mirror-goog-studio-main:build-system/gradle-core/src/main/java/com/android/build/gradle/tasks/ExternalNativeJsonGenerator.kt
-
 tasks.configureEach { task ->
+  // Make sure that we generate our prefab publication file only after having built the native library
+  // so that not a header publication file, but a full configuration publication will be generated, which
+  // will include the .so file
+
   def prefabConfigurePattern = ~/^prefab(.+)ConfigurePackage$/
   def matcher = task.name =~ prefabConfigurePattern
   if (matcher.matches()) {
@@ -14,12 +13,7 @@ tasks.configureEach { task ->
 }
 
 afterEvaluate {
-  def abis = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"]
-  // Check if the root project overrides architectures
-  if (rootProject.hasProperty("reactNativeArchitectures")) {
-    abis = rootProject.getProperty("reactNativeArchitectures").split(",").toList()
-  }
-
+  def abis = reactNativeArchitectures()
   rootProject.allprojects.each { proj ->
     if (proj === rootProject) return
 
@@ -35,6 +29,9 @@ afterEvaluate {
     }
 
     def variants = proj.android.hasProperty('applicationVariants') ? proj.android.applicationVariants : proj.android.libraryVariants
+    // Touch the prefab_config.json files to ensure that in ExternalNativeJsonGenerator.kt we will re-trigger the prefab CLI to
+    // generate a libnameConfig.cmake file that will contain our native library (.so).
+    // See this condition: https://cs.android.com/android-studio/platform/tools/base/+/mirror-goog-studio-main:build-system/gradle-core/src/main/java/com/android/build/gradle/tasks/ExternalNativeJsonGenerator.kt;l=207-219?q=createPrefabBuildSystemGlue
     variants.all { variant ->
       def variantName = variant.name
       abis.each { abi ->
