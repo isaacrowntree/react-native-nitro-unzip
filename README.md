@@ -1,19 +1,34 @@
 # react-native-nitro-unzip
 
 [![npm](https://img.shields.io/npm/v/react-native-nitro-unzip)](https://www.npmjs.com/package/react-native-nitro-unzip)
+[![npm downloads](https://img.shields.io/npm/dm/react-native-nitro-unzip)](https://www.npmjs.com/package/react-native-nitro-unzip)
 [![license](https://img.shields.io/npm/l/react-native-nitro-unzip)](https://github.com/isaacrowntree/react-native-nitro-unzip/blob/main/LICENSE)
 [![CI](https://github.com/isaacrowntree/react-native-nitro-unzip/actions/workflows/lint-typescript.yml/badge.svg)](https://github.com/isaacrowntree/react-native-nitro-unzip/actions/workflows/lint-typescript.yml)
+![Platform - iOS](https://img.shields.io/badge/platform-iOS-blue)
+![Platform - Android](https://img.shields.io/badge/platform-Android-green)
 
 High-performance ZIP operations for React Native, powered by [Nitro Modules](https://nitro.margelo.com/).
 
-- **iOS**: SSZipArchive (C-based libz) — ~500 files/sec
-- **Android**: Optimized ZipInputStream with 64KB buffers — ~474 files/sec
+- **iOS**: [SSZipArchive](https://github.com/ZipArchive/ZipArchive) (C-based libz) — ~500 files/sec
+- **Android**: Optimized ZipInputStream + [zip4j](https://github.com/srikanth-lingala/zip4j) for encryption — ~474 files/sec
 - **Zero bridge overhead** — progress callbacks via JSI, no serialization
 - **Object instances** — each task is an observable, cancellable `UnzipTask` or `ZipTask`
 - **Concurrent operations** supported out of the box
 - **Password support** — AES-256 encrypted archives (zip4j on Android, SSZipArchive on iOS)
 - **Zip creation** — compress files and directories with optional password protection
 - **Background tasks** — iOS background task management for continued extraction
+
+### vs react-native-zip-archive
+
+| | react-native-nitro-unzip | react-native-zip-archive |
+|---|---|---|
+| Architecture | JSI (Nitro Modules) | Bridge |
+| Progress callbacks | Via JSI, no serialization | Via bridge events |
+| Cancellation | Synchronous | Not supported |
+| Concurrent ops | Yes | Limited |
+| Password support | AES-256 (zip & unzip) | Unzip only |
+| Zip creation | Yes | Yes |
+| New Architecture | Required | Optional |
 
 ## Installation
 
