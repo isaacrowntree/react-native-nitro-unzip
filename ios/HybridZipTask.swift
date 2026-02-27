@@ -10,11 +10,6 @@ import UIKit
  * The caller can observe progress, cancel, or await the result.
  */
 class HybridZipTask: HybridZipTaskSpec {
-  // MARK: - HybridObject requirements
-
-  var hybridContext = margelo.nitro.HybridContext()
-  var memorySize: Int { return getSizeOf(self) }
-
   // MARK: - Spec properties
 
   let taskId: String

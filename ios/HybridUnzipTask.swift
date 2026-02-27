@@ -16,11 +16,6 @@ import UIKit
  * - Background task support for continued extraction when app is backgrounded
  */
 class HybridUnzipTask: HybridUnzipTaskSpec {
-  // MARK: - HybridObject requirements
-
-  var hybridContext = margelo.nitro.HybridContext()
-  var memorySize: Int { return getSizeOf(self) }
-
   // MARK: - Spec properties
 
   let taskId: String

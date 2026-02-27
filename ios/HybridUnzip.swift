@@ -12,8 +12,6 @@ import NitroModules
  * ```
  */
 class HybridUnzip: HybridUnzipSpec {
-  var hybridContext = margelo.nitro.HybridContext()
-  var memorySize: Int { return getSizeOf(self) }
 
   func extract(zipPath: String, destinationPath: String) throws -> any HybridUnzipTaskSpec {
     return HybridUnzipTask(zipPath: zipPath, destinationPath: destinationPath)
