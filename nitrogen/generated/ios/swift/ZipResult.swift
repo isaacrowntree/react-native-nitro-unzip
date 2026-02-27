@@ -18,8 +18,8 @@ public extension ZipResult {
   /**
    * Create a new instance of `ZipResult`.
    */
-  init(success: Bool, compressedFiles: Double, duration: Double, averageSpeed: Double, totalBytes: Double) {
-    self.init(success, compressedFiles, duration, averageSpeed, totalBytes)
+  init(success: Bool, compressedFiles: Double, totalFiles: Double, duration: Double, averageSpeed: Double, totalBytes: Double) {
+    self.init(success, compressedFiles, totalFiles, duration, averageSpeed, totalBytes)
   }
 
   @inline(__always)
@@ -30,6 +30,11 @@ public extension ZipResult {
   @inline(__always)
   var compressedFiles: Double {
     return self.__compressedFiles
+  }
+  
+  @inline(__always)
+  var totalFiles: Double {
+    return self.__totalFiles
   }
   
   @inline(__always)

@@ -124,6 +124,7 @@ describe('react-native-nitro-unzip', () => {
       const result: UnzipResult = {
         success: true,
         extractedFiles: 100,
+        totalFiles: 100,
         duration: 5000,
         averageSpeed: 20,
         totalBytes: 10240,
@@ -145,6 +146,7 @@ describe('react-native-nitro-unzip', () => {
       const result: ZipResult = {
         success: true,
         compressedFiles: 10,
+        totalFiles: 10,
         duration: 3000,
         averageSpeed: 3.3,
         totalBytes: 5120,

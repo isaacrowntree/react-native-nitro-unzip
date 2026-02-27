@@ -41,13 +41,14 @@ namespace margelo::nitro::unzip {
   public:
     bool success     SWIFT_PRIVATE;
     double compressedFiles     SWIFT_PRIVATE;
+    double totalFiles     SWIFT_PRIVATE;
     double duration     SWIFT_PRIVATE;
     double averageSpeed     SWIFT_PRIVATE;
     double totalBytes     SWIFT_PRIVATE;
 
   public:
     ZipResult() = default;
-    explicit ZipResult(bool success, double compressedFiles, double duration, double averageSpeed, double totalBytes): success(success), compressedFiles(compressedFiles), duration(duration), averageSpeed(averageSpeed), totalBytes(totalBytes) {}
+    explicit ZipResult(bool success, double compressedFiles, double totalFiles, double duration, double averageSpeed, double totalBytes): success(success), compressedFiles(compressedFiles), totalFiles(totalFiles), duration(duration), averageSpeed(averageSpeed), totalBytes(totalBytes) {}
 
   public:
     friend bool operator==(const ZipResult& lhs, const ZipResult& rhs) = default;
@@ -65,6 +66,7 @@ namespace margelo::nitro {
       return margelo::nitro::unzip::ZipResult(
         JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "success"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "compressedFiles"))),
+        JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "totalFiles"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "duration"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "averageSpeed"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "totalBytes")))
@@ -74,6 +76,7 @@ namespace margelo::nitro {
       jsi::Object obj(runtime);
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "success"), JSIConverter<bool>::toJSI(runtime, arg.success));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "compressedFiles"), JSIConverter<double>::toJSI(runtime, arg.compressedFiles));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "totalFiles"), JSIConverter<double>::toJSI(runtime, arg.totalFiles));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "duration"), JSIConverter<double>::toJSI(runtime, arg.duration));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "averageSpeed"), JSIConverter<double>::toJSI(runtime, arg.averageSpeed));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "totalBytes"), JSIConverter<double>::toJSI(runtime, arg.totalBytes));
@@ -89,6 +92,7 @@ namespace margelo::nitro {
       }
       if (!JSIConverter<bool>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "success")))) return false;
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "compressedFiles")))) return false;
+      if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "totalFiles")))) return false;
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "duration")))) return false;
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "averageSpeed")))) return false;
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "totalBytes")))) return false;

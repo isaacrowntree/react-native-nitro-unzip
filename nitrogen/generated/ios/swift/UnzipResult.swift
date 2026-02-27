@@ -18,8 +18,8 @@ public extension UnzipResult {
   /**
    * Create a new instance of `UnzipResult`.
    */
-  init(success: Bool, extractedFiles: Double, duration: Double, averageSpeed: Double, totalBytes: Double) {
-    self.init(success, extractedFiles, duration, averageSpeed, totalBytes)
+  init(success: Bool, extractedFiles: Double, totalFiles: Double, duration: Double, averageSpeed: Double, totalBytes: Double) {
+    self.init(success, extractedFiles, totalFiles, duration, averageSpeed, totalBytes)
   }
 
   @inline(__always)
@@ -30,6 +30,11 @@ public extension UnzipResult {
   @inline(__always)
   var extractedFiles: Double {
     return self.__extractedFiles
+  }
+  
+  @inline(__always)
+  var totalFiles: Double {
+    return self.__totalFiles
   }
   
   @inline(__always)

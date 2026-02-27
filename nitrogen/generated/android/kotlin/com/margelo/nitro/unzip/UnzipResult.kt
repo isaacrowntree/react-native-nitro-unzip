@@ -25,6 +25,9 @@ data class UnzipResult(
   val extractedFiles: Double,
   @DoNotStrip
   @Keep
+  val totalFiles: Double,
+  @DoNotStrip
+  @Keep
   val duration: Double,
   @DoNotStrip
   @Keep
@@ -43,8 +46,8 @@ data class UnzipResult(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(success: Boolean, extractedFiles: Double, duration: Double, averageSpeed: Double, totalBytes: Double): UnzipResult {
-      return UnzipResult(success, extractedFiles, duration, averageSpeed, totalBytes)
+    private fun fromCpp(success: Boolean, extractedFiles: Double, totalFiles: Double, duration: Double, averageSpeed: Double, totalBytes: Double): UnzipResult {
+      return UnzipResult(success, extractedFiles, totalFiles, duration, averageSpeed, totalBytes)
     }
   }
 }

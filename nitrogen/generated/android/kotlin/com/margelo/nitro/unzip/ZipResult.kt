@@ -25,6 +25,9 @@ data class ZipResult(
   val compressedFiles: Double,
   @DoNotStrip
   @Keep
+  val totalFiles: Double,
+  @DoNotStrip
+  @Keep
   val duration: Double,
   @DoNotStrip
   @Keep
@@ -43,8 +46,8 @@ data class ZipResult(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(success: Boolean, compressedFiles: Double, duration: Double, averageSpeed: Double, totalBytes: Double): ZipResult {
-      return ZipResult(success, compressedFiles, duration, averageSpeed, totalBytes)
+    private fun fromCpp(success: Boolean, compressedFiles: Double, totalFiles: Double, duration: Double, averageSpeed: Double, totalBytes: Double): ZipResult {
+      return ZipResult(success, compressedFiles, totalFiles, duration, averageSpeed, totalBytes)
     }
   }
 }

@@ -124,9 +124,10 @@ Creates an `Unzip` factory instance.
 |---|---|---|
 | `success` | `boolean` | Whether extraction completed |
 | `extractedFiles` | `number` | Total files extracted |
+| `totalFiles` | `number` | Total files in the archive |
 | `duration` | `number` | Duration in milliseconds |
 | `averageSpeed` | `number` | Average files per second |
-| `totalBytes` | `number` | Total bytes extracted |
+| `totalBytes` | `number` | Size of the ZIP file in bytes |
 
 ### `ZipProgress`
 
@@ -143,6 +144,7 @@ Creates an `Unzip` factory instance.
 |---|---|---|
 | `success` | `boolean` | Whether compression completed |
 | `compressedFiles` | `number` | Total files compressed |
+| `totalFiles` | `number` | Total files to compress |
 | `duration` | `number` | Duration in milliseconds |
 | `averageSpeed` | `number` | Average files per second |
 | `totalBytes` | `number` | Total bytes written |

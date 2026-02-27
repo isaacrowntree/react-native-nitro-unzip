@@ -26,6 +26,8 @@ export interface UnzipResult {
   success: boolean;
   /** Total number of files extracted */
   extractedFiles: number;
+  /** Total number of files in the archive */
+  totalFiles: number;
   /** Total extraction duration in milliseconds */
   duration: number;
   /** Average extraction speed in files per second */
@@ -87,6 +89,8 @@ export interface ZipResult {
   success: boolean;
   /** Total number of files compressed */
   compressedFiles: number;
+  /** Total number of files to compress */
+  totalFiles: number;
   /** Total compression duration in milliseconds */
   duration: number;
   /** Average compression speed in files per second */

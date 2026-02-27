@@ -198,6 +198,7 @@ class HybridZipTask: HybridZipTaskSpec {
     return ZipResult(
       success: true,
       compressedFiles: Double(finalCount),
+      totalFiles: Double(totalFiles),
       duration: duration,
       averageSpeed: averageSpeed,
       totalBytes: totalBytes

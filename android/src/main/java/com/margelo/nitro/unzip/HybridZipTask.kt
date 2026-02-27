@@ -145,6 +145,7 @@ class HybridZipTask(
     ZipResult(
       success = true,
       compressedFiles = compressedCount.toDouble(),
+      totalFiles = totalFiles.toDouble(),
       duration = durationMs,
       averageSpeed = avgSpeed,
       totalBytes = totalBytes

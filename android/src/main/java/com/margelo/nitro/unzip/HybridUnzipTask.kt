@@ -163,13 +163,15 @@ class HybridUnzipTask(
 
     val durationMs = (System.currentTimeMillis() - startTime).toDouble()
     val avgSpeed = if (durationMs > 0) extractedCount / (durationMs / 1000.0) else 0.0
+    val zipFileSize = sourceFile.length().toDouble()
 
     UnzipResult(
       success = true,
       extractedFiles = extractedCount.toDouble(),
+      totalFiles = totalEntries.toDouble(),
       duration = durationMs,
       averageSpeed = avgSpeed,
-      totalBytes = 0.0
+      totalBytes = zipFileSize
     )
   }
 
@@ -239,13 +241,15 @@ class HybridUnzipTask(
 
     val durationMs = (System.currentTimeMillis() - startTime).toDouble()
     val avgSpeed = if (durationMs > 0) extractedCount / (durationMs / 1000.0) else 0.0
+    val zipFileSize = sourceFile.length().toDouble()
 
     UnzipResult(
       success = true,
       extractedFiles = extractedCount.toDouble(),
+      totalFiles = totalEntries.toDouble(),
       duration = durationMs,
       averageSpeed = avgSpeed,
-      totalBytes = 0.0
+      totalBytes = zipFileSize
     )
   }
 

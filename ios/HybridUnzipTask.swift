@@ -130,10 +130,11 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
     }
 
     var extractedFiles = 0
+    var totalFileCount = 0
     var lastProgressUpdate = Date()
 
     // SSZipArchive progress handler — called per file
-    let progressHandler: (String, unz_file_info, Int, Int) -> Void = { [weak self] _, _, entryNumber, total in
+    let progressHandler: (String, unz_file_info, Int, Int) -> Void = { [weak self] _, fileInfo, entryNumber, total in
       guard let self = self else { return }
 
       // Check cancellation
@@ -144,6 +145,7 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
       if cancelled { return }
 
       extractedFiles = entryNumber
+      totalFileCount = total
 
       // Throttle progress updates
       let now = Date()
@@ -161,7 +163,7 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
           totalFiles: Double(total),
           progress: progress,
           speed: speed,
-          processedBytes: 0
+          processedBytes: Double(fileInfo.uncompressed_size)
         ))
         lastProgressUpdate = now
       }
@@ -202,12 +204,22 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
     let finalCount = extractedFiles
     let averageSpeed = duration > 0 ? Double(finalCount) / (duration / 1000) : 0
 
+    // Calculate total bytes from extracted files
+    let totalBytes: Double
+    if let attrs = try? fileManager.attributesOfItem(atPath: cleanZip),
+       let fileSize = attrs[.size] as? UInt64 {
+      totalBytes = Double(fileSize)
+    } else {
+      totalBytes = 0
+    }
+
     return UnzipResult(
       success: true,
       extractedFiles: Double(finalCount),
+      totalFiles: Double(totalFileCount),
       duration: duration,
       averageSpeed: averageSpeed,
-      totalBytes: 0
+      totalBytes: totalBytes
     )
   }
 

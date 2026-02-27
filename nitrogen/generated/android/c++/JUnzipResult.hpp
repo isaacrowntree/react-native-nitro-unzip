@@ -35,6 +35,8 @@ namespace margelo::nitro::unzip {
       jboolean success = this->getFieldValue(fieldSuccess);
       static const auto fieldExtractedFiles = clazz->getField<double>("extractedFiles");
       double extractedFiles = this->getFieldValue(fieldExtractedFiles);
+      static const auto fieldTotalFiles = clazz->getField<double>("totalFiles");
+      double totalFiles = this->getFieldValue(fieldTotalFiles);
       static const auto fieldDuration = clazz->getField<double>("duration");
       double duration = this->getFieldValue(fieldDuration);
       static const auto fieldAverageSpeed = clazz->getField<double>("averageSpeed");
@@ -44,6 +46,7 @@ namespace margelo::nitro::unzip {
       return UnzipResult(
         static_cast<bool>(success),
         extractedFiles,
+        totalFiles,
         duration,
         averageSpeed,
         totalBytes
@@ -56,13 +59,14 @@ namespace margelo::nitro::unzip {
      */
     [[maybe_unused]]
     static jni::local_ref<JUnzipResult::javaobject> fromCpp(const UnzipResult& value) {
-      using JSignature = JUnzipResult(jboolean, double, double, double, double);
+      using JSignature = JUnzipResult(jboolean, double, double, double, double, double);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
         clazz,
         value.success,
         value.extractedFiles,
+        value.totalFiles,
         value.duration,
         value.averageSpeed,
         value.totalBytes
