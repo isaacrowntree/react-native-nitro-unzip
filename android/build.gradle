@@ -18,6 +18,8 @@ apply plugin: 'kotlin-android'
 
 // Nitrogen autolinking — adds generated Kotlin sources
 apply from: '../nitrogen/generated/android/NitroUnzip+autolinking.gradle'
+// Fix prefab discovery for sibling project dependencies (e.g. react-native-nitro-modules)
+apply from: './fix-prefab.gradle'
 
 android {
   namespace "com.margelo.nitro.unzip"
