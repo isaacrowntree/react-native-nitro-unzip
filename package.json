@@ -94,10 +94,7 @@
     "extends": [
       "@react-native",
       "prettier"
-    ],
-    "rules": {
-      "prettier/prettier": "warn"
-    }
+    ]
   },
   "prettier": {
     "semi": true,

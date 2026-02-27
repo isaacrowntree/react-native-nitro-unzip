@@ -1,11 +1,8 @@
 import type {
   UnzipProgress,
   UnzipResult,
-  UnzipTask,
   ZipProgress,
   ZipResult,
-  ZipTask,
-  Unzip,
 } from '../index';
 
 // Mock the NitroModules dependency
