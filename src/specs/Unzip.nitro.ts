@@ -1,5 +1,7 @@
 import type { HybridObject } from "react-native-nitro-modules";
 
+// ─── Extraction types ────────────────────────────────────────────────
+
 /**
  * Progress information for an active extraction.
  */
@@ -61,22 +63,86 @@ export interface UnzipTask
   await(): Promise<UnzipResult>;
 }
 
+// ─── Compression types ───────────────────────────────────────────────
+
 /**
- * Factory for creating extraction tasks.
+ * Progress information for an active zip creation.
+ */
+export interface ZipProgress {
+  /** Number of files compressed so far */
+  compressedFiles: number;
+  /** Total number of files to compress */
+  totalFiles: number;
+  /** Compression progress from 0.0 to 1.0 */
+  progress: number;
+  /** Current compression speed in files per second */
+  speed: number;
+}
+
+/**
+ * Result returned when zip creation completes successfully.
+ */
+export interface ZipResult {
+  /** Whether compression completed successfully */
+  success: boolean;
+  /** Total number of files compressed */
+  compressedFiles: number;
+  /** Total compression duration in milliseconds */
+  duration: number;
+  /** Average compression speed in files per second */
+  averageSpeed: number;
+  /** Total bytes written to the zip file */
+  totalBytes: number;
+}
+
+/**
+ * A single zip creation operation. Each call to `Unzip.zip()` returns
+ * a `ZipTask` instance that can be observed and cancelled independently.
+ */
+export interface ZipTask
+  extends HybridObject<{ ios: "swift"; android: "kotlin" }> {
+  /** Unique identifier for this zip task */
+  readonly taskId: string;
+
+  /**
+   * Register a callback to receive progress updates.
+   * Progress is throttled to ~1 update per second.
+   */
+  onProgress(callback: (progress: ZipProgress) => void): void;
+
+  /** Cancel this zip creation. Safe to call multiple times. */
+  cancel(): void;
+
+  /**
+   * Await the zip result. Resolves when zip creation completes,
+   * rejects if cancelled or an error occurs.
+   */
+  await(): Promise<ZipResult>;
+}
+
+// ─── Factory ─────────────────────────────────────────────────────────
+
+/**
+ * Factory for creating extraction and compression tasks.
  *
  * @example
  * ```typescript
  * import { getUnzip } from 'react-native-nitro-unzip'
  *
  * const unzip = getUnzip()
+ *
+ * // Extract
  * const task = unzip.extract('/path/to/archive.zip', '/path/to/output')
- *
- * task.onProgress((p) => {
- *   console.log(`${p.extractedFiles}/${p.totalFiles} — ${p.speed.toFixed(0)} files/sec`)
- * })
- *
+ * task.onProgress((p) => console.log(`${(p.progress * 100).toFixed(0)}%`))
  * const result = await task.await()
- * console.log(`Done: ${result.extractedFiles} files in ${result.duration}ms`)
+ *
+ * // Extract with password
+ * const pwTask = unzip.extractWithPassword('/path/to/encrypted.zip', '/output', 'secret')
+ * const pwResult = await pwTask.await()
+ *
+ * // Create zip
+ * const zipTask = unzip.zip('/path/to/folder', '/path/to/output.zip')
+ * const zipResult = await zipTask.await()
  * ```
  */
 export interface Unzip
@@ -89,4 +155,39 @@ export interface Unzip
    * @param destinationPath - Absolute path to extract into (created if missing)
    */
   extract(zipPath: string, destinationPath: string): UnzipTask;
+
+  /**
+   * Extract a password-protected ZIP archive.
+   *
+   * @param zipPath - Absolute path to the ZIP file
+   * @param destinationPath - Absolute path to extract into
+   * @param password - Password for the encrypted archive
+   */
+  extractWithPassword(
+    zipPath: string,
+    destinationPath: string,
+    password: string,
+  ): UnzipTask;
+
+  /**
+   * Create a ZIP archive from a directory.
+   *
+   * @param sourcePath - Absolute path to the directory to compress
+   * @param destinationZipPath - Absolute path for the output ZIP file
+   */
+  zip(sourcePath: string, destinationZipPath: string): ZipTask;
+
+  /**
+   * Create a password-protected ZIP archive from a directory.
+   * Uses AES-256 encryption on Android, standard zip encryption on iOS.
+   *
+   * @param sourcePath - Absolute path to the directory to compress
+   * @param destinationZipPath - Absolute path for the output ZIP file
+   * @param password - Password to protect the archive
+   */
+  zipWithPassword(
+    sourcePath: string,
+    destinationZipPath: string,
+    password: string,
+  ): ZipTask;
 }

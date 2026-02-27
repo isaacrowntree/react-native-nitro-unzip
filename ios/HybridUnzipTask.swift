@@ -29,6 +29,7 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
 
   private let zipPath: String
   private let destinationPath: String
+  private let password: String?
   private var progressCallback: ((_ progress: UnzipProgress) -> Void)?
   private var shouldCancel = false
   private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
@@ -40,10 +41,11 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
   private var rejectPromise: ((Error) -> Void)?
   private var hasStarted = false
 
-  init(zipPath: String, destinationPath: String) {
+  init(zipPath: String, destinationPath: String, password: String? = nil) {
     self.taskId = "unzip_\(ProcessInfo.processInfo.globallyUniqueString)"
     self.zipPath = zipPath
     self.destinationPath = destinationPath
+    self.password = password
     super.init()
   }
 
@@ -170,7 +172,7 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
       atPath: cleanZip,
       toDestination: cleanDest,
       overwrite: true,
-      password: nil,
+      password: password,
       progressHandler: progressHandler,
       completionHandler: nil
     )

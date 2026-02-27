@@ -15,6 +15,9 @@ namespace margelo::nitro::unzip {
     // load custom methods/properties
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridMethod("extract", &HybridUnzipSpec::extract);
+      prototype.registerHybridMethod("extractWithPassword", &HybridUnzipSpec::extractWithPassword);
+      prototype.registerHybridMethod("zip", &HybridUnzipSpec::zip);
+      prototype.registerHybridMethod("zipWithPassword", &HybridUnzipSpec::zipWithPassword);
     });
   }
 

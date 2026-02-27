@@ -56,6 +56,9 @@ namespace margelo::nitro::unzip {
   public:
     // Methods
     std::shared_ptr<HybridUnzipTaskSpec> extract(const std::string& zipPath, const std::string& destinationPath) override;
+    std::shared_ptr<HybridUnzipTaskSpec> extractWithPassword(const std::string& zipPath, const std::string& destinationPath, const std::string& password) override;
+    std::shared_ptr<HybridZipTaskSpec> zip(const std::string& sourcePath, const std::string& destinationZipPath) override;
+    std::shared_ptr<HybridZipTaskSpec> zipWithPassword(const std::string& sourcePath, const std::string& destinationZipPath, const std::string& password) override;
 
   private:
     friend HybridBase;

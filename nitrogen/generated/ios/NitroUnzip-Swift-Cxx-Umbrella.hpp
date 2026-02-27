@@ -12,16 +12,25 @@
 namespace margelo::nitro::unzip { class HybridUnzipSpec; }
 // Forward declaration of `HybridUnzipTaskSpec` to properly resolve imports.
 namespace margelo::nitro::unzip { class HybridUnzipTaskSpec; }
+// Forward declaration of `HybridZipTaskSpec` to properly resolve imports.
+namespace margelo::nitro::unzip { class HybridZipTaskSpec; }
 // Forward declaration of `UnzipProgress` to properly resolve imports.
 namespace margelo::nitro::unzip { struct UnzipProgress; }
 // Forward declaration of `UnzipResult` to properly resolve imports.
 namespace margelo::nitro::unzip { struct UnzipResult; }
+// Forward declaration of `ZipProgress` to properly resolve imports.
+namespace margelo::nitro::unzip { struct ZipProgress; }
+// Forward declaration of `ZipResult` to properly resolve imports.
+namespace margelo::nitro::unzip { struct ZipResult; }
 
 // Include C++ defined types
 #include "HybridUnzipSpec.hpp"
 #include "HybridUnzipTaskSpec.hpp"
+#include "HybridZipTaskSpec.hpp"
 #include "UnzipProgress.hpp"
 #include "UnzipResult.hpp"
+#include "ZipProgress.hpp"
+#include "ZipResult.hpp"
 #include <NitroModules/Promise.hpp>
 #include <NitroModules/Result.hpp>
 #include <exception>
@@ -43,6 +52,8 @@ namespace margelo::nitro::unzip { struct UnzipResult; }
 namespace NitroUnzip { class HybridUnzipSpec_cxx; }
 // Forward declaration of `HybridUnzipTaskSpec_cxx` to properly resolve imports.
 namespace NitroUnzip { class HybridUnzipTaskSpec_cxx; }
+// Forward declaration of `HybridZipTaskSpec_cxx` to properly resolve imports.
+namespace NitroUnzip { class HybridZipTaskSpec_cxx; }
 
 // Include Swift defined types
 #if __has_include("NitroUnzip-Swift.h")

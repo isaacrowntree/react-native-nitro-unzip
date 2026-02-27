@@ -14,10 +14,13 @@ namespace NitroUnzip { class HybridUnzipSpec_cxx; }
 
 // Forward declaration of `HybridUnzipTaskSpec` to properly resolve imports.
 namespace margelo::nitro::unzip { class HybridUnzipTaskSpec; }
+// Forward declaration of `HybridZipTaskSpec` to properly resolve imports.
+namespace margelo::nitro::unzip { class HybridZipTaskSpec; }
 
 #include <memory>
 #include "HybridUnzipTaskSpec.hpp"
 #include <string>
+#include "HybridZipTaskSpec.hpp"
 
 #include "NitroUnzip-Swift-Cxx-Umbrella.hpp"
 
@@ -71,6 +74,30 @@ namespace margelo::nitro::unzip {
     // Methods
     inline std::shared_ptr<HybridUnzipTaskSpec> extract(const std::string& zipPath, const std::string& destinationPath) override {
       auto __result = _swiftPart.extract(zipPath, destinationPath);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline std::shared_ptr<HybridUnzipTaskSpec> extractWithPassword(const std::string& zipPath, const std::string& destinationPath, const std::string& password) override {
+      auto __result = _swiftPart.extractWithPassword(zipPath, destinationPath, password);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline std::shared_ptr<HybridZipTaskSpec> zip(const std::string& sourcePath, const std::string& destinationZipPath) override {
+      auto __result = _swiftPart.zip(sourcePath, destinationZipPath);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline std::shared_ptr<HybridZipTaskSpec> zipWithPassword(const std::string& sourcePath, const std::string& destinationZipPath, const std::string& password) override {
+      auto __result = _swiftPart.zipWithPassword(sourcePath, destinationZipPath, password);
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }

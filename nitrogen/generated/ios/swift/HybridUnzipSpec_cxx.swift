@@ -138,4 +138,49 @@ open class HybridUnzipSpec_cxx {
       return bridge.create_Result_std__shared_ptr_HybridUnzipTaskSpec__(__exceptionPtr)
     }
   }
+  
+  @inline(__always)
+  public final func extractWithPassword(zipPath: std.string, destinationPath: std.string, password: std.string) -> bridge.Result_std__shared_ptr_HybridUnzipTaskSpec__ {
+    do {
+      let __result = try self.__implementation.extractWithPassword(zipPath: String(zipPath), destinationPath: String(destinationPath), password: String(password))
+      let __resultCpp = { () -> bridge.std__shared_ptr_HybridUnzipTaskSpec_ in
+        let __cxxWrapped = __result.getCxxWrapper()
+        return __cxxWrapped.getCxxPart()
+      }()
+      return bridge.create_Result_std__shared_ptr_HybridUnzipTaskSpec__(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_std__shared_ptr_HybridUnzipTaskSpec__(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func zip(sourcePath: std.string, destinationZipPath: std.string) -> bridge.Result_std__shared_ptr_HybridZipTaskSpec__ {
+    do {
+      let __result = try self.__implementation.zip(sourcePath: String(sourcePath), destinationZipPath: String(destinationZipPath))
+      let __resultCpp = { () -> bridge.std__shared_ptr_HybridZipTaskSpec_ in
+        let __cxxWrapped = __result.getCxxWrapper()
+        return __cxxWrapped.getCxxPart()
+      }()
+      return bridge.create_Result_std__shared_ptr_HybridZipTaskSpec__(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_std__shared_ptr_HybridZipTaskSpec__(__exceptionPtr)
+    }
+  }
+  
+  @inline(__always)
+  public final func zipWithPassword(sourcePath: std.string, destinationZipPath: std.string, password: std.string) -> bridge.Result_std__shared_ptr_HybridZipTaskSpec__ {
+    do {
+      let __result = try self.__implementation.zipWithPassword(sourcePath: String(sourcePath), destinationZipPath: String(destinationZipPath), password: String(password))
+      let __resultCpp = { () -> bridge.std__shared_ptr_HybridZipTaskSpec_ in
+        let __cxxWrapped = __result.getCxxWrapper()
+        return __cxxWrapped.getCxxPart()
+      }()
+      return bridge.create_Result_std__shared_ptr_HybridZipTaskSpec__(__resultCpp)
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_std__shared_ptr_HybridZipTaskSpec__(__exceptionPtr)
+    }
+  }
 }

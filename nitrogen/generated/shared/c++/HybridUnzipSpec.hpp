@@ -15,10 +15,13 @@
 
 // Forward declaration of `HybridUnzipTaskSpec` to properly resolve imports.
 namespace margelo::nitro::unzip { class HybridUnzipTaskSpec; }
+// Forward declaration of `HybridZipTaskSpec` to properly resolve imports.
+namespace margelo::nitro::unzip { class HybridZipTaskSpec; }
 
 #include <memory>
 #include "HybridUnzipTaskSpec.hpp"
 #include <string>
+#include "HybridZipTaskSpec.hpp"
 
 namespace margelo::nitro::unzip {
 
@@ -52,6 +55,9 @@ namespace margelo::nitro::unzip {
     public:
       // Methods
       virtual std::shared_ptr<HybridUnzipTaskSpec> extract(const std::string& zipPath, const std::string& destinationPath) = 0;
+      virtual std::shared_ptr<HybridUnzipTaskSpec> extractWithPassword(const std::string& zipPath, const std::string& destinationPath, const std::string& password) = 0;
+      virtual std::shared_ptr<HybridZipTaskSpec> zip(const std::string& sourcePath, const std::string& destinationZipPath) = 0;
+      virtual std::shared_ptr<HybridZipTaskSpec> zipWithPassword(const std::string& sourcePath, const std::string& destinationZipPath, const std::string& password) = 0;
 
     protected:
       // Hybrid Setup

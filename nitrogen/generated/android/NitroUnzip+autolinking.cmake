@@ -34,9 +34,11 @@ target_sources(
   ../nitrogen/generated/android/NitroUnzipOnLoad.cpp
   # Shared Nitrogen C++ sources
   ../nitrogen/generated/shared/c++/HybridUnzipTaskSpec.cpp
+  ../nitrogen/generated/shared/c++/HybridZipTaskSpec.cpp
   ../nitrogen/generated/shared/c++/HybridUnzipSpec.cpp
   # Android-specific Nitrogen C++ sources
   ../nitrogen/generated/android/c++/JHybridUnzipTaskSpec.cpp
+  ../nitrogen/generated/android/c++/JHybridZipTaskSpec.cpp
   ../nitrogen/generated/android/c++/JHybridUnzipSpec.cpp
 )
 

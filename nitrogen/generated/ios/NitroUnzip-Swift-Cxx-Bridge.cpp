@@ -10,6 +10,7 @@
 // Include C++ implementation defined types
 #include "HybridUnzipSpecSwift.hpp"
 #include "HybridUnzipTaskSpecSwift.hpp"
+#include "HybridZipTaskSpecSwift.hpp"
 #include "NitroUnzip-Swift-Cxx-Umbrella.hpp"
 #include <NitroModules/NitroDefines.hpp>
 
@@ -52,6 +53,38 @@ namespace margelo::nitro::unzip::bridge::swift {
     }
     #endif
     NitroUnzip::HybridUnzipTaskSpec_cxx& swiftPart = swiftWrapper->getSwiftPart();
+    return swiftPart.toUnsafe();
+  }
+  
+  // pragma MARK: std::function<void(const ZipProgress& /* progress */)>
+  Func_void_ZipProgress create_Func_void_ZipProgress(void* NON_NULL swiftClosureWrapper) noexcept {
+    auto swiftClosure = NitroUnzip::Func_void_ZipProgress::fromUnsafe(swiftClosureWrapper);
+    return [swiftClosure = std::move(swiftClosure)](const ZipProgress& progress) mutable -> void {
+      swiftClosure.call(progress);
+    };
+  }
+  
+  // pragma MARK: std::function<void(const ZipResult& /* result */)>
+  Func_void_ZipResult create_Func_void_ZipResult(void* NON_NULL swiftClosureWrapper) noexcept {
+    auto swiftClosure = NitroUnzip::Func_void_ZipResult::fromUnsafe(swiftClosureWrapper);
+    return [swiftClosure = std::move(swiftClosure)](const ZipResult& result) mutable -> void {
+      swiftClosure.call(result);
+    };
+  }
+  
+  // pragma MARK: std::shared_ptr<HybridZipTaskSpec>
+  std::shared_ptr<HybridZipTaskSpec> create_std__shared_ptr_HybridZipTaskSpec_(void* NON_NULL swiftUnsafePointer) noexcept {
+    NitroUnzip::HybridZipTaskSpec_cxx swiftPart = NitroUnzip::HybridZipTaskSpec_cxx::fromUnsafe(swiftUnsafePointer);
+    return std::make_shared<margelo::nitro::unzip::HybridZipTaskSpecSwift>(swiftPart);
+  }
+  void* NON_NULL get_std__shared_ptr_HybridZipTaskSpec_(std__shared_ptr_HybridZipTaskSpec_ cppType) {
+    std::shared_ptr<margelo::nitro::unzip::HybridZipTaskSpecSwift> swiftWrapper = std::dynamic_pointer_cast<margelo::nitro::unzip::HybridZipTaskSpecSwift>(cppType);
+    #ifdef NITRO_DEBUG
+    if (swiftWrapper == nullptr) [[unlikely]] {
+      throw std::runtime_error("Class \"HybridZipTaskSpec\" is not implemented in Swift!");
+    }
+    #endif
+    NitroUnzip::HybridZipTaskSpec_cxx& swiftPart = swiftWrapper->getSwiftPart();
     return swiftPart.toUnsafe();
   }
   

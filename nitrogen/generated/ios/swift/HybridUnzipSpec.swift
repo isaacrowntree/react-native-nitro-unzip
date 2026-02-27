@@ -14,6 +14,9 @@ public protocol HybridUnzipSpec_protocol: HybridObject {
 
   // Methods
   func extract(zipPath: String, destinationPath: String) throws -> (any HybridUnzipTaskSpec)
+  func extractWithPassword(zipPath: String, destinationPath: String, password: String) throws -> (any HybridUnzipTaskSpec)
+  func zip(sourcePath: String, destinationZipPath: String) throws -> (any HybridZipTaskSpec)
+  func zipWithPassword(sourcePath: String, destinationZipPath: String, password: String) throws -> (any HybridZipTaskSpec)
 }
 
 public extension HybridUnzipSpec_protocol {

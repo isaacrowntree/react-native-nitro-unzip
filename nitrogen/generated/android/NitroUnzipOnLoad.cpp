@@ -17,6 +17,8 @@
 
 #include "JHybridUnzipTaskSpec.hpp"
 #include "JFunc_void_UnzipProgress.hpp"
+#include "JHybridZipTaskSpec.hpp"
+#include "JFunc_void_ZipProgress.hpp"
 #include "JHybridUnzipSpec.hpp"
 #include <NitroModules/DefaultConstructableObject.hpp>
 
@@ -35,6 +37,8 @@ void registerAllNatives() {
     // Register native JNI methods
   margelo::nitro::unzip::JHybridUnzipTaskSpec::registerNatives();
   margelo::nitro::unzip::JFunc_void_UnzipProgress_cxx::registerNatives();
+  margelo::nitro::unzip::JHybridZipTaskSpec::registerNatives();
+  margelo::nitro::unzip::JFunc_void_ZipProgress_cxx::registerNatives();
   margelo::nitro::unzip::JHybridUnzipSpec::registerNatives();
 
   // Register Nitro Hybrid Objects
@@ -50,6 +54,14 @@ void registerAllNatives() {
     "UnzipTask",
     []() -> std::shared_ptr<HybridObject> {
       static DefaultConstructableObject<JHybridUnzipTaskSpec::javaobject> object("com/margelo/nitro/unzip/HybridUnzipTask");
+      auto instance = object.create();
+      return instance->cthis()->shared();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "ZipTask",
+    []() -> std::shared_ptr<HybridObject> {
+      static DefaultConstructableObject<JHybridZipTaskSpec::javaobject> object("com/margelo/nitro/unzip/HybridZipTask");
       auto instance = object.create();
       return instance->cthis()->shared();
     }

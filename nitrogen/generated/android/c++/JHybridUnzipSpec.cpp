@@ -9,10 +9,14 @@
 
 // Forward declaration of `HybridUnzipTaskSpec` to properly resolve imports.
 namespace margelo::nitro::unzip { class HybridUnzipTaskSpec; }
+// Forward declaration of `HybridZipTaskSpec` to properly resolve imports.
+namespace margelo::nitro::unzip { class HybridZipTaskSpec; }
 
 #include <memory>
 #include "HybridUnzipTaskSpec.hpp"
 #include "JHybridUnzipTaskSpec.hpp"
+#include "HybridZipTaskSpec.hpp"
+#include "JHybridZipTaskSpec.hpp"
 #include <string>
 
 namespace margelo::nitro::unzip {
@@ -58,6 +62,21 @@ namespace margelo::nitro::unzip {
     static const auto method = javaClassStatic()->getMethod<jni::local_ref<JHybridUnzipTaskSpec::javaobject>(jni::alias_ref<jni::JString> /* zipPath */, jni::alias_ref<jni::JString> /* destinationPath */)>("extract");
     auto __result = method(_javaPart, jni::make_jstring(zipPath), jni::make_jstring(destinationPath));
     return __result->cthis()->shared_cast<JHybridUnzipTaskSpec>();
+  }
+  std::shared_ptr<HybridUnzipTaskSpec> JHybridUnzipSpec::extractWithPassword(const std::string& zipPath, const std::string& destinationPath, const std::string& password) {
+    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JHybridUnzipTaskSpec::javaobject>(jni::alias_ref<jni::JString> /* zipPath */, jni::alias_ref<jni::JString> /* destinationPath */, jni::alias_ref<jni::JString> /* password */)>("extractWithPassword");
+    auto __result = method(_javaPart, jni::make_jstring(zipPath), jni::make_jstring(destinationPath), jni::make_jstring(password));
+    return __result->cthis()->shared_cast<JHybridUnzipTaskSpec>();
+  }
+  std::shared_ptr<HybridZipTaskSpec> JHybridUnzipSpec::zip(const std::string& sourcePath, const std::string& destinationZipPath) {
+    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JHybridZipTaskSpec::javaobject>(jni::alias_ref<jni::JString> /* sourcePath */, jni::alias_ref<jni::JString> /* destinationZipPath */)>("zip");
+    auto __result = method(_javaPart, jni::make_jstring(sourcePath), jni::make_jstring(destinationZipPath));
+    return __result->cthis()->shared_cast<JHybridZipTaskSpec>();
+  }
+  std::shared_ptr<HybridZipTaskSpec> JHybridUnzipSpec::zipWithPassword(const std::string& sourcePath, const std::string& destinationZipPath, const std::string& password) {
+    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JHybridZipTaskSpec::javaobject>(jni::alias_ref<jni::JString> /* sourcePath */, jni::alias_ref<jni::JString> /* destinationZipPath */, jni::alias_ref<jni::JString> /* password */)>("zipWithPassword");
+    auto __result = method(_javaPart, jni::make_jstring(sourcePath), jni::make_jstring(destinationZipPath), jni::make_jstring(password));
+    return __result->cthis()->shared_cast<JHybridZipTaskSpec>();
   }
 
 } // namespace margelo::nitro::unzip

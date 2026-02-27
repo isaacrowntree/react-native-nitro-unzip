@@ -12,22 +12,33 @@
 namespace margelo::nitro::unzip { class HybridUnzipSpec; }
 // Forward declaration of `HybridUnzipTaskSpec` to properly resolve imports.
 namespace margelo::nitro::unzip { class HybridUnzipTaskSpec; }
+// Forward declaration of `HybridZipTaskSpec` to properly resolve imports.
+namespace margelo::nitro::unzip { class HybridZipTaskSpec; }
 // Forward declaration of `UnzipProgress` to properly resolve imports.
 namespace margelo::nitro::unzip { struct UnzipProgress; }
 // Forward declaration of `UnzipResult` to properly resolve imports.
 namespace margelo::nitro::unzip { struct UnzipResult; }
+// Forward declaration of `ZipProgress` to properly resolve imports.
+namespace margelo::nitro::unzip { struct ZipProgress; }
+// Forward declaration of `ZipResult` to properly resolve imports.
+namespace margelo::nitro::unzip { struct ZipResult; }
 
 // Forward declarations of Swift defined types
 // Forward declaration of `HybridUnzipSpec_cxx` to properly resolve imports.
 namespace NitroUnzip { class HybridUnzipSpec_cxx; }
 // Forward declaration of `HybridUnzipTaskSpec_cxx` to properly resolve imports.
 namespace NitroUnzip { class HybridUnzipTaskSpec_cxx; }
+// Forward declaration of `HybridZipTaskSpec_cxx` to properly resolve imports.
+namespace NitroUnzip { class HybridZipTaskSpec_cxx; }
 
 // Include C++ defined types
 #include "HybridUnzipSpec.hpp"
 #include "HybridUnzipTaskSpec.hpp"
+#include "HybridZipTaskSpec.hpp"
 #include "UnzipProgress.hpp"
 #include "UnzipResult.hpp"
+#include "ZipProgress.hpp"
+#include "ZipResult.hpp"
 #include <NitroModules/Promise.hpp>
 #include <NitroModules/PromiseHolder.hpp>
 #include <NitroModules/Result.hpp>
@@ -149,6 +160,83 @@ namespace margelo::nitro::unzip::bridge::swift {
     return Result<std::shared_ptr<Promise<UnzipResult>>>::withError(error);
   }
   
+  // pragma MARK: std::function<void(const ZipProgress& /* progress */)>
+  /**
+   * Specialized version of `std::function<void(const ZipProgress&)>`.
+   */
+  using Func_void_ZipProgress = std::function<void(const ZipProgress& /* progress */)>;
+  /**
+   * Wrapper class for a `std::function<void(const ZipProgress& / * progress * /)>`, this can be used from Swift.
+   */
+  class Func_void_ZipProgress_Wrapper final {
+  public:
+    explicit Func_void_ZipProgress_Wrapper(std::function<void(const ZipProgress& /* progress */)>&& func): _function(std::make_unique<std::function<void(const ZipProgress& /* progress */)>>(std::move(func))) {}
+    inline void call(ZipProgress progress) const noexcept {
+      _function->operator()(progress);
+    }
+  private:
+    std::unique_ptr<std::function<void(const ZipProgress& /* progress */)>> _function;
+  } SWIFT_NONCOPYABLE;
+  Func_void_ZipProgress create_Func_void_ZipProgress(void* NON_NULL swiftClosureWrapper) noexcept;
+  inline Func_void_ZipProgress_Wrapper wrap_Func_void_ZipProgress(Func_void_ZipProgress value) noexcept {
+    return Func_void_ZipProgress_Wrapper(std::move(value));
+  }
+  
+  // pragma MARK: std::shared_ptr<Promise<ZipResult>>
+  /**
+   * Specialized version of `std::shared_ptr<Promise<ZipResult>>`.
+   */
+  using std__shared_ptr_Promise_ZipResult__ = std::shared_ptr<Promise<ZipResult>>;
+  inline std::shared_ptr<Promise<ZipResult>> create_std__shared_ptr_Promise_ZipResult__() noexcept {
+    return Promise<ZipResult>::create();
+  }
+  inline PromiseHolder<ZipResult> wrap_std__shared_ptr_Promise_ZipResult__(std::shared_ptr<Promise<ZipResult>> promise) noexcept {
+    return PromiseHolder<ZipResult>(std::move(promise));
+  }
+  
+  // pragma MARK: std::function<void(const ZipResult& /* result */)>
+  /**
+   * Specialized version of `std::function<void(const ZipResult&)>`.
+   */
+  using Func_void_ZipResult = std::function<void(const ZipResult& /* result */)>;
+  /**
+   * Wrapper class for a `std::function<void(const ZipResult& / * result * /)>`, this can be used from Swift.
+   */
+  class Func_void_ZipResult_Wrapper final {
+  public:
+    explicit Func_void_ZipResult_Wrapper(std::function<void(const ZipResult& /* result */)>&& func): _function(std::make_unique<std::function<void(const ZipResult& /* result */)>>(std::move(func))) {}
+    inline void call(ZipResult result) const noexcept {
+      _function->operator()(result);
+    }
+  private:
+    std::unique_ptr<std::function<void(const ZipResult& /* result */)>> _function;
+  } SWIFT_NONCOPYABLE;
+  Func_void_ZipResult create_Func_void_ZipResult(void* NON_NULL swiftClosureWrapper) noexcept;
+  inline Func_void_ZipResult_Wrapper wrap_Func_void_ZipResult(Func_void_ZipResult value) noexcept {
+    return Func_void_ZipResult_Wrapper(std::move(value));
+  }
+  
+  // pragma MARK: std::shared_ptr<HybridZipTaskSpec>
+  /**
+   * Specialized version of `std::shared_ptr<HybridZipTaskSpec>`.
+   */
+  using std__shared_ptr_HybridZipTaskSpec_ = std::shared_ptr<HybridZipTaskSpec>;
+  std::shared_ptr<HybridZipTaskSpec> create_std__shared_ptr_HybridZipTaskSpec_(void* NON_NULL swiftUnsafePointer) noexcept;
+  void* NON_NULL get_std__shared_ptr_HybridZipTaskSpec_(std__shared_ptr_HybridZipTaskSpec_ cppType);
+  
+  // pragma MARK: std::weak_ptr<HybridZipTaskSpec>
+  using std__weak_ptr_HybridZipTaskSpec_ = std::weak_ptr<HybridZipTaskSpec>;
+  inline std__weak_ptr_HybridZipTaskSpec_ weakify_std__shared_ptr_HybridZipTaskSpec_(const std::shared_ptr<HybridZipTaskSpec>& strong) noexcept { return strong; }
+  
+  // pragma MARK: Result<std::shared_ptr<Promise<ZipResult>>>
+  using Result_std__shared_ptr_Promise_ZipResult___ = Result<std::shared_ptr<Promise<ZipResult>>>;
+  inline Result_std__shared_ptr_Promise_ZipResult___ create_Result_std__shared_ptr_Promise_ZipResult___(const std::shared_ptr<Promise<ZipResult>>& value) noexcept {
+    return Result<std::shared_ptr<Promise<ZipResult>>>::withValue(value);
+  }
+  inline Result_std__shared_ptr_Promise_ZipResult___ create_Result_std__shared_ptr_Promise_ZipResult___(const std::exception_ptr& error) noexcept {
+    return Result<std::shared_ptr<Promise<ZipResult>>>::withError(error);
+  }
+  
   // pragma MARK: std::shared_ptr<HybridUnzipSpec>
   /**
    * Specialized version of `std::shared_ptr<HybridUnzipSpec>`.
@@ -168,6 +256,15 @@ namespace margelo::nitro::unzip::bridge::swift {
   }
   inline Result_std__shared_ptr_HybridUnzipTaskSpec__ create_Result_std__shared_ptr_HybridUnzipTaskSpec__(const std::exception_ptr& error) noexcept {
     return Result<std::shared_ptr<HybridUnzipTaskSpec>>::withError(error);
+  }
+  
+  // pragma MARK: Result<std::shared_ptr<HybridZipTaskSpec>>
+  using Result_std__shared_ptr_HybridZipTaskSpec__ = Result<std::shared_ptr<HybridZipTaskSpec>>;
+  inline Result_std__shared_ptr_HybridZipTaskSpec__ create_Result_std__shared_ptr_HybridZipTaskSpec__(const std::shared_ptr<HybridZipTaskSpec>& value) noexcept {
+    return Result<std::shared_ptr<HybridZipTaskSpec>>::withValue(value);
+  }
+  inline Result_std__shared_ptr_HybridZipTaskSpec__ create_Result_std__shared_ptr_HybridZipTaskSpec__(const std::exception_ptr& error) noexcept {
+    return Result<std::shared_ptr<HybridZipTaskSpec>>::withError(error);
   }
 
 } // namespace margelo::nitro::unzip::bridge::swift
