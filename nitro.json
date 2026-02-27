@@ -1,0 +1,22 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["unzip"],
+  "ios": {
+    "iosModuleName": "NitroUnzip"
+  },
+  "android": {
+    "androidNamespace": ["unzip"],
+    "androidCxxLibName": "NitroUnzip"
+  },
+  "autolinking": {
+    "Unzip": {
+      "swift": "HybridUnzip",
+      "kotlin": "HybridUnzip"
+    },
+    "UnzipTask": {
+      "swift": "HybridUnzipTask",
+      "kotlin": "HybridUnzipTask"
+    }
+  },
+  "ignorePaths": ["node_modules", "lib", "example"]
+}

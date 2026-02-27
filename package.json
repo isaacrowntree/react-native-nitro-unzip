@@ -1,0 +1,76 @@
+{
+  "name": "react-native-nitro-unzip",
+  "version": "0.1.0",
+  "description": "High-performance ZIP extraction for React Native, powered by Nitro Modules",
+  "main": "lib/commonjs/index.js",
+  "module": "lib/module/index.js",
+  "types": "lib/typescript/index.d.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "lib",
+    "ios",
+    "android",
+    "nitrogen",
+    "react-native-nitro-unzip.podspec",
+    "nitro.json",
+    "!**/__tests__",
+    "!**/__fixtures__",
+    "!**/__mocks__",
+    "!ios/build",
+    "!android/build"
+  ],
+  "scripts": {
+    "nitrogen": "nitrogen",
+    "typescript": "tsc --noEmit",
+    "prepare": "bob build",
+    "prepack": "bob build"
+  },
+  "keywords": [
+    "react-native",
+    "nitro",
+    "nitro-modules",
+    "unzip",
+    "zip",
+    "archive",
+    "extraction",
+    "decompress",
+    "ios",
+    "android"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isaacrowntree/react-native-nitro-unzip.git"
+  },
+  "author": "Isaac Rowntree",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/isaacrowntree/react-native-nitro-unzip/issues"
+  },
+  "homepage": "https://github.com/isaacrowntree/react-native-nitro-unzip#readme",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-nitro-modules": ">=0.34.0"
+  },
+  "devDependencies": {
+    "nitrogen": "^0.34.0",
+    "react-native-nitro-modules": "^0.34.0",
+    "react-native-builder-bob": "^0.35.0",
+    "typescript": "^5.0.0"
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": [
+      [
+        "commonjs",
+        {
+          "esm": true
+        }
+      ],
+      "module",
+      "typescript"
+    ]
+  }
+}
