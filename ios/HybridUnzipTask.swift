@@ -30,10 +30,6 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
   private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
   private let lock = NSLock()
   private let progressThrottle: TimeInterval = 1.0
-
-  // Promise resolution — held until extraction completes or fails
-  private var resolvePromise: ((UnzipResult) -> Void)?
-  private var rejectPromise: ((Error) -> Void)?
   private var hasStarted = false
 
   init(zipPath: String, destinationPath: String, password: String? = nil) {
@@ -59,44 +55,37 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
   }
 
   func await() throws -> Promise<UnzipResult> {
-    return Promise.async { [self] resolve, reject in
-      self.lock.lock()
-      self.resolvePromise = resolve
-      self.rejectPromise = reject
+    lock.lock()
+    guard !hasStarted else {
+      lock.unlock()
+      return Promise.rejected(withError: NSError(
+        domain: "NitroUnzip",
+        code: 4,
+        userInfo: [NSLocalizedDescriptionKey: "Task already started"]
+      ))
+    }
+    hasStarted = true
+    lock.unlock()
 
-      guard !self.hasStarted else {
-        self.lock.unlock()
-        return
+    return Promise.async {
+      try await withCheckedThrowingContinuation { continuation in
+        self.beginBackgroundTask()
+
+        DispatchQueue.global(qos: .userInitiated).async {
+          do {
+            let result = try self.extract()
+            self.endBackgroundTask()
+            continuation.resume(returning: result)
+          } catch {
+            self.endBackgroundTask()
+            continuation.resume(throwing: error)
+          }
+        }
       }
-      self.hasStarted = true
-      self.lock.unlock()
-
-      self.startExtraction()
     }
   }
 
   // MARK: - Extraction
-
-  private func startExtraction() {
-    beginBackgroundTask()
-
-    DispatchQueue.global(qos: .userInitiated).async { [self] in
-      do {
-        let result = try self.extract()
-        self.endBackgroundTask()
-        self.lock.lock()
-        let resolve = self.resolvePromise
-        self.lock.unlock()
-        resolve?(result)
-      } catch {
-        self.endBackgroundTask()
-        self.lock.lock()
-        let reject = self.rejectPromise
-        self.lock.unlock()
-        reject?(error)
-      }
-    }
-  }
 
   private func extract() throws -> UnzipResult {
     let startTime = Date()
@@ -199,7 +188,7 @@ class HybridUnzipTask: HybridUnzipTaskSpec {
     let finalCount = extractedFiles
     let averageSpeed = duration > 0 ? Double(finalCount) / (duration / 1000) : 0
 
-    // Calculate total bytes from extracted files
+    // Calculate total bytes from zip file size
     let totalBytes: Double
     if let attrs = try? fileManager.attributesOfItem(atPath: cleanZip),
        let fileSize = attrs[.size] as? UInt64 {

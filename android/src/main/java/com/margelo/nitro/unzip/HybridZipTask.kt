@@ -46,14 +46,11 @@ class HybridZipTask(
   }
 
   override fun await(): Promise<ZipResult> {
-    return Promise.async { resolve, reject ->
+    return Promise.async {
       try {
-        val result = compress()
-        resolve(result)
+        compress()
       } catch (e: CancellationException) {
-        reject(Exception("Zip creation cancelled"))
-      } catch (e: Exception) {
-        reject(e)
+        throw Exception("Zip creation cancelled")
       }
     }
   }

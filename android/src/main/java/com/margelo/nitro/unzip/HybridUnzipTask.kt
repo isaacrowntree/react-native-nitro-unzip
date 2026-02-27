@@ -49,14 +49,11 @@ class HybridUnzipTask(
   }
 
   override fun await(): Promise<UnzipResult> {
-    return Promise.async { resolve, reject ->
+    return Promise.async {
       try {
-        val result = if (password != null) extractWithPassword() else extract()
-        resolve(result)
+        if (password != null) extractWithPassword() else extract()
       } catch (e: CancellationException) {
-        reject(Exception("Extraction cancelled"))
-      } catch (e: Exception) {
-        reject(e)
+        throw Exception("Extraction cancelled")
       }
     }
   }

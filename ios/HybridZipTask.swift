@@ -24,9 +24,6 @@ class HybridZipTask: HybridZipTaskSpec {
   private var backgroundTaskId: UIBackgroundTaskIdentifier = .invalid
   private let lock = NSLock()
   private let progressThrottle: TimeInterval = 1.0
-
-  private var resolvePromise: ((ZipResult) -> Void)?
-  private var rejectPromise: ((Error) -> Void)?
   private var hasStarted = false
 
   init(sourcePath: String, destinationZipPath: String, password: String? = nil) {
@@ -52,44 +49,37 @@ class HybridZipTask: HybridZipTaskSpec {
   }
 
   func await() throws -> Promise<ZipResult> {
-    return Promise.async { [self] resolve, reject in
-      self.lock.lock()
-      self.resolvePromise = resolve
-      self.rejectPromise = reject
+    lock.lock()
+    guard !hasStarted else {
+      lock.unlock()
+      return Promise.rejected(withError: NSError(
+        domain: "NitroUnzip",
+        code: 4,
+        userInfo: [NSLocalizedDescriptionKey: "Task already started"]
+      ))
+    }
+    hasStarted = true
+    lock.unlock()
 
-      guard !self.hasStarted else {
-        self.lock.unlock()
-        return
+    return Promise.async {
+      try await withCheckedThrowingContinuation { continuation in
+        self.beginBackgroundTask()
+
+        DispatchQueue.global(qos: .userInitiated).async {
+          do {
+            let result = try self.compress()
+            self.endBackgroundTask()
+            continuation.resume(returning: result)
+          } catch {
+            self.endBackgroundTask()
+            continuation.resume(throwing: error)
+          }
+        }
       }
-      self.hasStarted = true
-      self.lock.unlock()
-
-      self.startCompression()
     }
   }
 
   // MARK: - Compression
-
-  private func startCompression() {
-    beginBackgroundTask()
-
-    DispatchQueue.global(qos: .userInitiated).async { [self] in
-      do {
-        let result = try self.compress()
-        self.endBackgroundTask()
-        self.lock.lock()
-        let resolve = self.resolvePromise
-        self.lock.unlock()
-        resolve?(result)
-      } catch {
-        self.endBackgroundTask()
-        self.lock.lock()
-        let reject = self.rejectPromise
-        self.lock.unlock()
-        reject?(error)
-      }
-    }
-  }
 
   private func compress() throws -> ZipResult {
     let startTime = Date()
