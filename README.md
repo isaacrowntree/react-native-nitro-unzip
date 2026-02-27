@@ -1,13 +1,19 @@
 # react-native-nitro-unzip
 
-High-performance ZIP extraction for React Native, powered by [Nitro Modules](https://nitro.margelo.com/).
+[![npm](https://img.shields.io/npm/v/react-native-nitro-unzip)](https://www.npmjs.com/package/react-native-nitro-unzip)
+[![license](https://img.shields.io/npm/l/react-native-nitro-unzip)](https://github.com/isaacrowntree/react-native-nitro-unzip/blob/main/LICENSE)
+[![CI](https://github.com/isaacrowntree/react-native-nitro-unzip/actions/workflows/lint-typescript.yml/badge.svg)](https://github.com/isaacrowntree/react-native-nitro-unzip/actions/workflows/lint-typescript.yml)
+
+High-performance ZIP operations for React Native, powered by [Nitro Modules](https://nitro.margelo.com/).
 
 - **iOS**: SSZipArchive (C-based libz) — ~500 files/sec
 - **Android**: Optimized ZipInputStream with 64KB buffers — ~474 files/sec
-- **Zero bridge overhead** for progress callbacks (JSI-based)
-- **Proper object instances** — each extraction is an `UnzipTask` you can observe and cancel
-- **Concurrent extractions** supported out of the box
-- **iOS background task** management for continued extraction when app is backgrounded
+- **Zero bridge overhead** — progress callbacks via JSI, no serialization
+- **Object instances** — each task is an observable, cancellable `UnzipTask` or `ZipTask`
+- **Concurrent operations** supported out of the box
+- **Password support** — AES-256 encrypted archives (zip4j on Android, SSZipArchive on iOS)
+- **Zip creation** — compress files and directories with optional password protection
+- **Background tasks** — iOS background task management for continued extraction
 
 ## Installation
 
@@ -16,26 +22,61 @@ npm install react-native-nitro-unzip react-native-nitro-modules
 cd ios && pod install
 ```
 
+> Requires React Native 0.75+ and [Nitro Modules](https://nitro.margelo.com/) 0.34+
+
 ## Usage
 
+### Extract a ZIP archive
+
 ```typescript
-import { getUnzip } from 'react-native-nitro-unzip'
+import { getUnzip } from 'react-native-nitro-unzip';
 
-const unzip = getUnzip()
-const task = unzip.extract('/path/to/archive.zip', '/path/to/output')
+const unzip = getUnzip();
+const task = unzip.extract('/path/to/archive.zip', '/path/to/output');
 
-// Track progress
 task.onProgress((p) => {
-  console.log(`${(p.progress * 100).toFixed(0)}% — ${p.extractedFiles}/${p.totalFiles} files`)
-  console.log(`Speed: ${p.speed.toFixed(0)} files/sec`)
-})
+  console.log(`${(p.progress * 100).toFixed(0)}% — ${p.extractedFiles}/${p.totalFiles} files`);
+  console.log(`Speed: ${p.speed.toFixed(0)} files/sec`);
+});
 
-// Await result
-const result = await task.await()
-console.log(`Extracted ${result.extractedFiles} files in ${result.duration}ms`)
+const result = await task.await();
+console.log(`Extracted ${result.extractedFiles} files in ${result.duration}ms`);
+```
 
-// Or cancel
-task.cancel()
+### Extract with password
+
+```typescript
+const task = unzip.extractWithPassword('/path/to/encrypted.zip', '/output', 'secret');
+const result = await task.await();
+```
+
+### Create a ZIP archive
+
+```typescript
+const task = unzip.zip('/path/to/folder', '/output/archive.zip');
+
+task.onProgress((p) => {
+  console.log(`${(p.progress * 100).toFixed(0)}% — ${p.compressedFiles}/${p.totalFiles}`);
+});
+
+const result = await task.await();
+console.log(`Compressed ${result.compressedFiles} files`);
+```
+
+### Create with password (AES-256)
+
+```typescript
+const task = unzip.zipWithPassword('/path/to/folder', '/output/secure.zip', 'secret');
+const result = await task.await();
+```
+
+### Cancel an operation
+
+```typescript
+const task = unzip.extract('/path/to/large.zip', '/output');
+
+// Cancel at any time — synchronous via JSI
+task.cancel();
 ```
 
 ## API
@@ -44,21 +85,28 @@ task.cancel()
 
 Creates an `Unzip` factory instance.
 
-### `Unzip.extract(zipPath, destinationPath): UnzipTask`
+### Extraction
 
-Starts extracting a ZIP archive. Returns an `UnzipTask` instance immediately.
+| Method | Returns | Description |
+|---|---|---|
+| `extract(zipPath, destPath)` | `UnzipTask` | Extract a ZIP archive |
+| `extractWithPassword(zipPath, destPath, password)` | `UnzipTask` | Extract a password-protected archive |
 
-- `zipPath` — absolute path to the ZIP file (`file://` URIs accepted)
-- `destinationPath` — absolute path to extract into (created if missing)
+### Compression
 
-### `UnzipTask`
+| Method | Returns | Description |
+|---|---|---|
+| `zip(sourcePath, destZipPath)` | `ZipTask` | Create a ZIP archive from a directory |
+| `zipWithPassword(sourcePath, destZipPath, password)` | `ZipTask` | Create a password-protected ZIP (AES-256) |
+
+### `UnzipTask` / `ZipTask`
 
 | Property/Method | Type | Description |
 |---|---|---|
-| `taskId` | `string` | Unique identifier for this extraction |
-| `onProgress(callback)` | `(progress: UnzipProgress) => void` | Register a progress callback (throttled to ~1/sec) |
-| `cancel()` | `void` | Cancel this extraction |
-| `await()` | `Promise<UnzipResult>` | Await the extraction result |
+| `taskId` | `string` | Unique identifier for this operation |
+| `onProgress(callback)` | `void` | Register a progress callback (throttled ~1/sec) |
+| `cancel()` | `void` | Cancel the operation (synchronous via JSI) |
+| `await()` | `Promise<Result>` | Await the operation result |
 
 ### `UnzipProgress`
 
@@ -80,6 +128,25 @@ Starts extracting a ZIP archive. Returns an `UnzipTask` instance immediately.
 | `averageSpeed` | `number` | Average files per second |
 | `totalBytes` | `number` | Total bytes extracted |
 
+### `ZipProgress`
+
+| Field | Type | Description |
+|---|---|---|
+| `compressedFiles` | `number` | Files compressed so far |
+| `totalFiles` | `number` | Total files to compress |
+| `progress` | `number` | 0.0 to 1.0 |
+| `speed` | `number` | Files per second |
+
+### `ZipResult`
+
+| Field | Type | Description |
+|---|---|---|
+| `success` | `boolean` | Whether compression completed |
+| `compressedFiles` | `number` | Total files compressed |
+| `duration` | `number` | Duration in milliseconds |
+| `averageSpeed` | `number` | Average files per second |
+| `totalBytes` | `number` | Total bytes written |
+
 ## Performance
 
 Benchmarked on a 350MB archive with 10,432 small files (map tiles):
@@ -97,10 +164,20 @@ Benchmarked on a 350MB archive with 10,432 small files (map tiles):
 
 ## Requirements
 
-- React Native 0.75+
-- Nitro Modules 0.34+
-- iOS 13+
-- Android SDK 21+
+| Requirement | Version |
+|---|---|
+| React Native | 0.75+ |
+| Nitro Modules | 0.34+ |
+| iOS | 13+ |
+| Android SDK | 21+ |
+
+## Example
+
+See the [example app](./example) for a working demo of extraction, zip creation, password support, and cancellation.
+
+## Contributing
+
+See the [contributing guide](CONTRIBUTING.md) to learn how to contribute to the repository and the development workflow.
 
 ## License
 

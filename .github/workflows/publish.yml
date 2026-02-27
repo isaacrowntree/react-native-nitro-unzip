@@ -20,6 +20,9 @@ jobs:
           node-version-file: '.nvmrc'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Install npm with Trusted Publishing support
+        run: npm install -g npm@latest
+
       - run: npm ci
 
       - run: npm test
