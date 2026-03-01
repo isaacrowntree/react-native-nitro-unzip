@@ -64,7 +64,7 @@
   "bugs": {
     "url": "https://github.com/isaacrowntree/react-native-nitro-unzip/issues"
   },
-  "homepage": "https://github.com/isaacrowntree/react-native-nitro-unzip#readme",
+  "homepage": "https://isaacrowntree.github.io/react-native-nitro-unzip/",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },

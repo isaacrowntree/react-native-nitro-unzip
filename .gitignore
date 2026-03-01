@@ -29,6 +29,12 @@ example/android/build/
 example/android/.gradle/
 example/.expo/
 
+# Docs
+docs/build/
+docs/node_modules/
+docs/.docusaurus/
+docs/docs/api/
+
 # OS
 .DS_Store
 Thumbs.db
