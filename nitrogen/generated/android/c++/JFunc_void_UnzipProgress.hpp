@@ -25,7 +25,7 @@ namespace margelo::nitro::unzip {
    */
   struct JFunc_void_UnzipProgress: public jni::JavaClass<JFunc_void_UnzipProgress> {
   public:
-    static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/unzip/Func_void_UnzipProgress;";
+    static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/unzip/Func_void_UnzipProgress;";
 
   public:
     /**
@@ -61,7 +61,7 @@ namespace margelo::nitro::unzip {
     }
 
   public:
-    static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/unzip/Func_void_UnzipProgress_cxx;";
+    static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/unzip/Func_void_UnzipProgress_cxx;";
     static void registerNatives() {
       registerHybrid({makeNativeMethod("invoke_cxx", JFunc_void_UnzipProgress_cxx::invoke_cxx)});
     }

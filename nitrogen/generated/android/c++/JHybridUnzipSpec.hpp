@@ -18,34 +18,33 @@ namespace margelo::nitro::unzip {
 
   using namespace facebook;
 
-  class JHybridUnzipSpec: public jni::HybridClass<JHybridUnzipSpec, JHybridObject>,
-                          public virtual HybridUnzipSpec {
+  class JHybridUnzipSpec: public virtual HybridUnzipSpec, public virtual JHybridObject {
   public:
-    static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/unzip/HybridUnzipSpec;";
-    static jni::local_ref<jhybriddata> initHybrid(jni::alias_ref<jhybridobject> jThis);
-    static void registerNatives();
+    struct JavaPart: public jni::JavaClass<JavaPart, JHybridObject::JavaPart> {
+      static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/unzip/HybridUnzipSpec;";
+      std::shared_ptr<JHybridUnzipSpec> getJHybridUnzipSpec();
+    };
+    struct CxxPart: public jni::HybridClass<CxxPart, JHybridObject::CxxPart> {
+      static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/unzip/HybridUnzipSpec$CxxPart;";
+      static jni::local_ref<jhybriddata> initHybrid(jni::alias_ref<jhybridobject> jThis);
+      static void registerNatives();
+      using HybridBase::HybridBase;
+    protected:
+      std::shared_ptr<JHybridObject> createHybridObject(const jni::local_ref<JHybridObject::JavaPart>& javaPart) override;
+    };
 
-  protected:
-    // C++ constructor (called from Java via `initHybrid()`)
-    explicit JHybridUnzipSpec(jni::alias_ref<jhybridobject> jThis) :
+  public:
+    explicit JHybridUnzipSpec(const jni::local_ref<JHybridUnzipSpec::JavaPart>& javaPart):
       HybridObject(HybridUnzipSpec::TAG),
-      HybridBase(jThis),
-      _javaPart(jni::make_global(jThis)) {}
-
-  public:
+      JHybridObject(javaPart),
+      _javaPart(jni::make_global(javaPart)) {}
     ~JHybridUnzipSpec() override {
       // Hermes GC can destroy JS objects on a non-JNI Thread.
       jni::ThreadScope::WithClassLoader([&] { _javaPart.reset(); });
     }
 
   public:
-    size_t getExternalMemorySize() noexcept override;
-    bool equals(const std::shared_ptr<HybridObject>& other) override;
-    void dispose() noexcept override;
-    std::string toString() override;
-
-  public:
-    inline const jni::global_ref<JHybridUnzipSpec::javaobject>& getJavaPart() const noexcept {
+    inline const jni::global_ref<JHybridUnzipSpec::JavaPart>& getJavaPart() const noexcept {
       return _javaPart;
     }
 
@@ -61,9 +60,7 @@ namespace margelo::nitro::unzip {
     std::shared_ptr<HybridZipTaskSpec> zipWithPassword(const std::string& sourcePath, const std::string& destinationZipPath, const std::string& password) override;
 
   private:
-    friend HybridBase;
-    using HybridBase::HybridBase;
-    jni::global_ref<JHybridUnzipSpec::javaobject> _javaPart;
+    jni::global_ref<JHybridUnzipSpec::JavaPart> _javaPart;
   };
 
 } // namespace margelo::nitro::unzip

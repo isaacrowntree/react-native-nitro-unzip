@@ -25,57 +25,51 @@ namespace margelo::nitro::unzip { struct UnzipProgress; }
 
 namespace margelo::nitro::unzip {
 
-  jni::local_ref<JHybridUnzipTaskSpec::jhybriddata> JHybridUnzipTaskSpec::initHybrid(jni::alias_ref<jhybridobject> jThis) {
+  std::shared_ptr<JHybridUnzipTaskSpec> JHybridUnzipTaskSpec::JavaPart::getJHybridUnzipTaskSpec() {
+    auto hybridObject = JHybridObject::JavaPart::getJHybridObject();
+    auto castHybridObject = std::dynamic_pointer_cast<JHybridUnzipTaskSpec>(hybridObject);
+    if (castHybridObject == nullptr) [[unlikely]] {
+      throw std::runtime_error("Failed to downcast JHybridObject to JHybridUnzipTaskSpec!");
+    }
+    return castHybridObject;
+  }
+
+  jni::local_ref<JHybridUnzipTaskSpec::CxxPart::jhybriddata> JHybridUnzipTaskSpec::CxxPart::initHybrid(jni::alias_ref<jhybridobject> jThis) {
     return makeCxxInstance(jThis);
   }
 
-  void JHybridUnzipTaskSpec::registerNatives() {
-    registerHybrid({
-      makeNativeMethod("initHybrid", JHybridUnzipTaskSpec::initHybrid),
-    });
-  }
-
-  size_t JHybridUnzipTaskSpec::getExternalMemorySize() noexcept {
-    static const auto method = javaClassStatic()->getMethod<jlong()>("getMemorySize");
-    return method(_javaPart);
-  }
-
-  bool JHybridUnzipTaskSpec::equals(const std::shared_ptr<HybridObject>& other) {
-    if (auto otherCast = std::dynamic_pointer_cast<JHybridUnzipTaskSpec>(other)) {
-      return _javaPart == otherCast->_javaPart;
+  std::shared_ptr<JHybridObject> JHybridUnzipTaskSpec::CxxPart::createHybridObject(const jni::local_ref<JHybridObject::JavaPart>& javaPart) {
+    auto castJavaPart = jni::dynamic_ref_cast<JHybridUnzipTaskSpec::JavaPart>(javaPart);
+    if (castJavaPart == nullptr) [[unlikely]] {
+      throw std::runtime_error("Failed to cast JHybridObject::JavaPart to JHybridUnzipTaskSpec::JavaPart!");
     }
-    return false;
+    return std::make_shared<JHybridUnzipTaskSpec>(castJavaPart);
   }
 
-  void JHybridUnzipTaskSpec::dispose() noexcept {
-    static const auto method = javaClassStatic()->getMethod<void()>("dispose");
-    method(_javaPart);
-  }
-
-  std::string JHybridUnzipTaskSpec::toString() {
-    static const auto method = javaClassStatic()->getMethod<jni::JString()>("toString");
-    auto javaString = method(_javaPart);
-    return javaString->toStdString();
+  void JHybridUnzipTaskSpec::CxxPart::registerNatives() {
+    registerHybrid({
+      makeNativeMethod("initHybrid", JHybridUnzipTaskSpec::CxxPart::initHybrid),
+    });
   }
 
   // Properties
   std::string JHybridUnzipTaskSpec::getTaskId() {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getTaskId");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getTaskId");
     auto __result = method(_javaPart);
     return __result->toStdString();
   }
 
   // Methods
   void JHybridUnzipTaskSpec::onProgress(const std::function<void(const UnzipProgress& /* progress */)>& callback) {
-    static const auto method = javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void_UnzipProgress::javaobject> /* callback */)>("onProgress_cxx");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JFunc_void_UnzipProgress::javaobject> /* callback */)>("onProgress_cxx");
     method(_javaPart, JFunc_void_UnzipProgress_cxx::fromCpp(callback));
   }
   void JHybridUnzipTaskSpec::cancel() {
-    static const auto method = javaClassStatic()->getMethod<void()>("cancel");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("cancel");
     method(_javaPart);
   }
   std::shared_ptr<Promise<UnzipResult>> JHybridUnzipTaskSpec::await() {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("await");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("await");
     auto __result = method(_javaPart);
     return [&]() {
       auto __promise = Promise<UnzipResult>::create();

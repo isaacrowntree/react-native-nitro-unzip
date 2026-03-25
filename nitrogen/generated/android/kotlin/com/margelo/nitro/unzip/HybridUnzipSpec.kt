@@ -24,23 +24,6 @@ import com.margelo.nitro.core.HybridObject
   "LocalVariableName", "PropertyName", "PrivatePropertyName", "FunctionName"
 )
 abstract class HybridUnzipSpec: HybridObject() {
-  @DoNotStrip
-  private var mHybridData: HybridData = initHybrid()
-
-  init {
-    super.updateNative(mHybridData)
-  }
-
-  override fun updateNative(hybridData: HybridData) {
-    mHybridData = hybridData
-    super.updateNative(hybridData)
-  }
-
-  // Default implementation of `HybridObject.toString()`
-  override fun toString(): String {
-    return "[HybridObject Unzip]"
-  }
-
   // Properties
   
 
@@ -61,7 +44,21 @@ abstract class HybridUnzipSpec: HybridObject() {
   @Keep
   abstract fun zipWithPassword(sourcePath: String, destinationZipPath: String, password: String): HybridZipTaskSpec
 
-  private external fun initHybrid(): HybridData
+  // Default implementation of `HybridObject.toString()`
+  override fun toString(): String {
+    return "[HybridObject Unzip]"
+  }
+
+  // C++ backing class
+  @DoNotStrip
+  @Keep
+  protected open class CxxPart(javaPart: HybridUnzipSpec): HybridObject.CxxPart(javaPart) {
+    // C++ JHybridUnzipSpec::CxxPart::initHybrid(...)
+    external override fun initHybrid(): HybridData
+  }
+  override fun createCxxPart(): CxxPart {
+    return CxxPart(this)
+  }
 
   companion object {
     protected const val TAG = "HybridUnzipSpec"

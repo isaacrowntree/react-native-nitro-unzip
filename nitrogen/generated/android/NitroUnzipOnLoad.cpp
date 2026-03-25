@@ -30,24 +30,31 @@ int initialize(JavaVM* vm) {
   });
 }
 
+struct JHybridUnzipSpecImpl: public jni::JavaClass<JHybridUnzipSpecImpl, JHybridUnzipSpec::JavaPart> {
+  static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/unzip/HybridUnzip;";
+  static std::shared_ptr<JHybridUnzipSpec> create() {
+    static const auto constructorFn = javaClassStatic()->getConstructor<JHybridUnzipSpecImpl::javaobject()>();
+    jni::local_ref<JHybridUnzipSpec::JavaPart> javaPart = javaClassStatic()->newObject(constructorFn);
+    return javaPart->getJHybridUnzipSpec();
+  }
+};
+
 void registerAllNatives() {
   using namespace margelo::nitro;
   using namespace margelo::nitro::unzip;
 
-    // Register native JNI methods
-  margelo::nitro::unzip::JHybridUnzipTaskSpec::registerNatives();
+  // Register native JNI methods
+  margelo::nitro::unzip::JHybridUnzipTaskSpec::CxxPart::registerNatives();
   margelo::nitro::unzip::JFunc_void_UnzipProgress_cxx::registerNatives();
-  margelo::nitro::unzip::JHybridZipTaskSpec::registerNatives();
+  margelo::nitro::unzip::JHybridZipTaskSpec::CxxPart::registerNatives();
   margelo::nitro::unzip::JFunc_void_ZipProgress_cxx::registerNatives();
-  margelo::nitro::unzip::JHybridUnzipSpec::registerNatives();
+  margelo::nitro::unzip::JHybridUnzipSpec::CxxPart::registerNatives();
 
   // Register Nitro Hybrid Objects
   HybridObjectRegistry::registerHybridObjectConstructor(
     "Unzip",
     []() -> std::shared_ptr<HybridObject> {
-      static DefaultConstructableObject<JHybridUnzipSpec::javaobject> object("com/margelo/nitro/unzip/HybridUnzip");
-      auto instance = object.create();
-      return instance->cthis()->shared();
+      return JHybridUnzipSpecImpl::create();
     }
   );
 }

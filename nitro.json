@@ -10,8 +10,14 @@
   },
   "autolinking": {
     "Unzip": {
-      "swift": "HybridUnzip",
-      "kotlin": "HybridUnzip"
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridUnzip"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "HybridUnzip"
+      }
     }
   },
   "ignorePaths": ["node_modules", "lib", "example"]

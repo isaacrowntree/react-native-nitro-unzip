@@ -21,7 +21,7 @@ namespace margelo::nitro::unzip {
    */
   struct JZipResult final: public jni::JavaClass<JZipResult> {
   public:
-    static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/unzip/ZipResult;";
+    static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/unzip/ZipResult;";
 
   public:
     /**

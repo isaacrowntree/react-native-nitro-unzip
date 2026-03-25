@@ -21,37 +21,31 @@ namespace margelo::nitro::unzip { class HybridZipTaskSpec; }
 
 namespace margelo::nitro::unzip {
 
-  jni::local_ref<JHybridUnzipSpec::jhybriddata> JHybridUnzipSpec::initHybrid(jni::alias_ref<jhybridobject> jThis) {
+  std::shared_ptr<JHybridUnzipSpec> JHybridUnzipSpec::JavaPart::getJHybridUnzipSpec() {
+    auto hybridObject = JHybridObject::JavaPart::getJHybridObject();
+    auto castHybridObject = std::dynamic_pointer_cast<JHybridUnzipSpec>(hybridObject);
+    if (castHybridObject == nullptr) [[unlikely]] {
+      throw std::runtime_error("Failed to downcast JHybridObject to JHybridUnzipSpec!");
+    }
+    return castHybridObject;
+  }
+
+  jni::local_ref<JHybridUnzipSpec::CxxPart::jhybriddata> JHybridUnzipSpec::CxxPart::initHybrid(jni::alias_ref<jhybridobject> jThis) {
     return makeCxxInstance(jThis);
   }
 
-  void JHybridUnzipSpec::registerNatives() {
-    registerHybrid({
-      makeNativeMethod("initHybrid", JHybridUnzipSpec::initHybrid),
-    });
-  }
-
-  size_t JHybridUnzipSpec::getExternalMemorySize() noexcept {
-    static const auto method = javaClassStatic()->getMethod<jlong()>("getMemorySize");
-    return method(_javaPart);
-  }
-
-  bool JHybridUnzipSpec::equals(const std::shared_ptr<HybridObject>& other) {
-    if (auto otherCast = std::dynamic_pointer_cast<JHybridUnzipSpec>(other)) {
-      return _javaPart == otherCast->_javaPart;
+  std::shared_ptr<JHybridObject> JHybridUnzipSpec::CxxPart::createHybridObject(const jni::local_ref<JHybridObject::JavaPart>& javaPart) {
+    auto castJavaPart = jni::dynamic_ref_cast<JHybridUnzipSpec::JavaPart>(javaPart);
+    if (castJavaPart == nullptr) [[unlikely]] {
+      throw std::runtime_error("Failed to cast JHybridObject::JavaPart to JHybridUnzipSpec::JavaPart!");
     }
-    return false;
+    return std::make_shared<JHybridUnzipSpec>(castJavaPart);
   }
 
-  void JHybridUnzipSpec::dispose() noexcept {
-    static const auto method = javaClassStatic()->getMethod<void()>("dispose");
-    method(_javaPart);
-  }
-
-  std::string JHybridUnzipSpec::toString() {
-    static const auto method = javaClassStatic()->getMethod<jni::JString()>("toString");
-    auto javaString = method(_javaPart);
-    return javaString->toStdString();
+  void JHybridUnzipSpec::CxxPart::registerNatives() {
+    registerHybrid({
+      makeNativeMethod("initHybrid", JHybridUnzipSpec::CxxPart::initHybrid),
+    });
   }
 
   // Properties
@@ -59,24 +53,24 @@ namespace margelo::nitro::unzip {
 
   // Methods
   std::shared_ptr<HybridUnzipTaskSpec> JHybridUnzipSpec::extract(const std::string& zipPath, const std::string& destinationPath) {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JHybridUnzipTaskSpec::javaobject>(jni::alias_ref<jni::JString> /* zipPath */, jni::alias_ref<jni::JString> /* destinationPath */)>("extract");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JHybridUnzipTaskSpec::JavaPart>(jni::alias_ref<jni::JString> /* zipPath */, jni::alias_ref<jni::JString> /* destinationPath */)>("extract");
     auto __result = method(_javaPart, jni::make_jstring(zipPath), jni::make_jstring(destinationPath));
-    return __result->cthis()->shared_cast<JHybridUnzipTaskSpec>();
+    return __result->getJHybridUnzipTaskSpec();
   }
   std::shared_ptr<HybridUnzipTaskSpec> JHybridUnzipSpec::extractWithPassword(const std::string& zipPath, const std::string& destinationPath, const std::string& password) {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JHybridUnzipTaskSpec::javaobject>(jni::alias_ref<jni::JString> /* zipPath */, jni::alias_ref<jni::JString> /* destinationPath */, jni::alias_ref<jni::JString> /* password */)>("extractWithPassword");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JHybridUnzipTaskSpec::JavaPart>(jni::alias_ref<jni::JString> /* zipPath */, jni::alias_ref<jni::JString> /* destinationPath */, jni::alias_ref<jni::JString> /* password */)>("extractWithPassword");
     auto __result = method(_javaPart, jni::make_jstring(zipPath), jni::make_jstring(destinationPath), jni::make_jstring(password));
-    return __result->cthis()->shared_cast<JHybridUnzipTaskSpec>();
+    return __result->getJHybridUnzipTaskSpec();
   }
   std::shared_ptr<HybridZipTaskSpec> JHybridUnzipSpec::zip(const std::string& sourcePath, const std::string& destinationZipPath) {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JHybridZipTaskSpec::javaobject>(jni::alias_ref<jni::JString> /* sourcePath */, jni::alias_ref<jni::JString> /* destinationZipPath */)>("zip");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JHybridZipTaskSpec::JavaPart>(jni::alias_ref<jni::JString> /* sourcePath */, jni::alias_ref<jni::JString> /* destinationZipPath */)>("zip");
     auto __result = method(_javaPart, jni::make_jstring(sourcePath), jni::make_jstring(destinationZipPath));
-    return __result->cthis()->shared_cast<JHybridZipTaskSpec>();
+    return __result->getJHybridZipTaskSpec();
   }
   std::shared_ptr<HybridZipTaskSpec> JHybridUnzipSpec::zipWithPassword(const std::string& sourcePath, const std::string& destinationZipPath, const std::string& password) {
-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JHybridZipTaskSpec::javaobject>(jni::alias_ref<jni::JString> /* sourcePath */, jni::alias_ref<jni::JString> /* destinationZipPath */, jni::alias_ref<jni::JString> /* password */)>("zipWithPassword");
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JHybridZipTaskSpec::JavaPart>(jni::alias_ref<jni::JString> /* sourcePath */, jni::alias_ref<jni::JString> /* destinationZipPath */, jni::alias_ref<jni::JString> /* password */)>("zipWithPassword");
     auto __result = method(_javaPart, jni::make_jstring(sourcePath), jni::make_jstring(destinationZipPath), jni::make_jstring(password));
-    return __result->cthis()->shared_cast<JHybridZipTaskSpec>();
+    return __result->getJHybridZipTaskSpec();
   }
 
 } // namespace margelo::nitro::unzip

@@ -21,7 +21,7 @@ namespace margelo::nitro::unzip {
    */
   struct JUnzipProgress final: public jni::JavaClass<JUnzipProgress> {
   public:
-    static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/unzip/UnzipProgress;";
+    static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/unzip/UnzipProgress;";
 
   public:
     /**
