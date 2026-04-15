@@ -13,6 +13,7 @@ Pods/
 # Android
 android/build/
 android/.gradle/
+android/.cxx/
 android/local.properties
 
 # IDE
@@ -28,6 +29,12 @@ example/ios/build/
 example/android/build/
 example/android/.gradle/
 example/.expo/
+
+# Test app (generated native projects + build output)
+test-app/node_modules/
+test-app/ios/
+test-app/android/
+test-app/.expo/
 
 # Docs
 docs/build/

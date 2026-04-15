@@ -12,8 +12,9 @@ react-native-nitro-unzip provides high-performance ZIP extraction and compressio
 |---|---|
 | React Native | 0.75+ |
 | Nitro Modules | 0.34+ |
-| iOS | 13+ |
+| iOS | 15.5+ |
 | Android SDK | 21+ |
+| Java (Android) | 17 |
 
 :::info New Architecture Required
 This library requires React Native's New Architecture (Fabric + TurboModules) as it is built on Nitro Modules.
@@ -31,9 +32,14 @@ npm install react-native-nitro-unzip react-native-nitro-modules
 cd ios && pod install
 ```
 
+The underlying `SSZipArchive` dependency requires **iOS 15.5+**. Set your deployment target accordingly:
+
+- **Bare React Native:** in `ios/Podfile`, set `platform :ios, '15.5'`.
+- **Expo:** in `ios/Podfile.properties.json`, add `"ios.deploymentTarget": "15.5"` (or use the [`expo-build-properties`](https://docs.expo.dev/versions/latest/sdk/build-properties/) plugin with `ios.deploymentTarget: "15.5"`).
+
 ### Android
 
-No additional setup needed — the library auto-links with React Native.
+No additional setup needed — the library auto-links with React Native. Your app must be built with **Java 17** (the RN 0.73+ default).
 
 ## Quick Start
 

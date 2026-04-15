@@ -28,7 +28,11 @@ npm install react-native-nitro-unzip react-native-nitro-modules
 cd ios && pod install
 ```
 
-> Requires React Native 0.75+ and [Nitro Modules](https://nitro.margelo.com/) 0.34+
+> Requires React Native 0.75+, [Nitro Modules](https://nitro.margelo.com/) 0.34+, iOS 15.5+, and Java 17 (Android).
+
+### iOS deployment target
+
+The library depends on `SSZipArchive`, which requires iOS 15.5+. Ensure your app's Podfile (or Expo `Podfile.properties.json`) sets `ios.deploymentTarget` to `15.5` or higher.
 
 ## Quick Example
 

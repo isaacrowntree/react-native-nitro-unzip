@@ -10,7 +10,7 @@ Pod::Spec.new do |s|
   s.license      = package['license']
   s.authors      = package['author']
   s.source       = { git: package['repository']['url'], tag: s.version.to_s }
-  s.platforms    = { ios: '13.0' }
+  s.platforms    = { ios: '15.5' }
   s.swift_version = '5.9'
   s.module_name  = 'NitroUnzip'
 
