@@ -71,6 +71,9 @@ class HybridUnzipTask(
     if (!destDir.exists()) {
       destDir.mkdirs()
     }
+    // Canonicalize the destination once for Zip Slip validation. Any entry
+    // whose resolved path doesn't start with this prefix is rejected.
+    val canonicalDestDir = destDir.canonicalFile
 
     val sourceFile = File(cleanZip)
     if (!sourceFile.exists()) {
@@ -84,6 +87,10 @@ class HybridUnzipTask(
     ZipInputStream(BufferedInputStream(sourceFile.inputStream(), BUFFER_SIZE)).use { zis ->
       var entry = zis.nextEntry
       while (entry != null) {
+        // Reject malicious entries before either pass touches the filesystem.
+        // Zip Slip: an entry named `../../foo` would resolve outside destDir
+        // and write to arbitrary app-private paths.
+        assertSafeEntryPath(canonicalDestDir, entry.name)
         if (entry.isDirectory) {
           directoriesToCreate.add(entry.name)
         } else {
@@ -112,6 +119,10 @@ class HybridUnzipTask(
 
       while (entry != null && isActive && !shouldCancel) {
         if (!entry.isDirectory) {
+          // Defence in depth: re-validate per entry in case the archive
+          // shuffles between passes (shouldn't, but ZIP central directory
+          // and local headers can disagree on malformed archives).
+          assertSafeEntryPath(canonicalDestDir, entry.name)
           val entryFile = File(destDir, entry.name)
 
           BufferedOutputStream(FileOutputStream(entryFile), BUFFER_SIZE).use { output ->
@@ -185,6 +196,7 @@ class HybridUnzipTask(
     if (!destDir.exists()) {
       destDir.mkdirs()
     }
+    val canonicalDestDir = destDir.canonicalFile
 
     val sourceFile = File(cleanZip)
     if (!sourceFile.exists()) {
@@ -195,6 +207,13 @@ class HybridUnzipTask(
     zipFile.setPassword(password!!.toCharArray())
 
     val fileHeaders = zipFile.fileHeaders
+    // Zip Slip mitigation — validate every entry's resolved path before
+    // delegating to zip4j. zip4j 2.10+ has its own check but defence in depth
+    // is cheap, and it shields against older versions if the resolved
+    // dependency tree slips.
+    for (header in fileHeaders) {
+      assertSafeEntryPath(canonicalDestDir, header.fileName)
+    }
     val totalEntries = fileHeaders.size
     var extractedCount = 0
     var lastProgressUpdate = System.currentTimeMillis()
@@ -251,5 +270,26 @@ class HybridUnzipTask(
   companion object {
     private const val BUFFER_SIZE = 65536
     private const val PROGRESS_THROTTLE_MS = 1000L
+
+    /**
+     * Zip Slip mitigation — reject any entry whose resolved canonical path
+     * doesn't sit inside the destination directory. Catches the classic
+     * `../../foo` payload as well as absolute paths (`/etc/passwd`) and
+     * exotic separators that resolve through `..` after canonicalisation.
+     *
+     * Throws SecurityException with the offending entry name so callers can
+     * fail loudly (and report to crash analytics) when malformed archives
+     * appear in production.
+     */
+    internal fun assertSafeEntryPath(canonicalDestDir: File, entryName: String) {
+      val resolved = File(canonicalDestDir, entryName).canonicalFile
+      val destPrefix = canonicalDestDir.path + File.separator
+      if (resolved.path != canonicalDestDir.path &&
+          !resolved.path.startsWith(destPrefix)) {
+        throw SecurityException(
+          "Refusing to extract entry outside destination: $entryName (resolves to ${resolved.path})"
+        )
+      }
+    }
   }
 }
