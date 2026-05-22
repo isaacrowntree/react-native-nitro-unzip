@@ -80,8 +80,8 @@ class HybridUnzipTask(
       throw Exception("Source ZIP file not found: $cleanZip")
     }
 
-    // --- Pass 1: collect directories ---
-    val directoriesToCreate = hashSetOf<String>()
+    // --- Pass 1: collect entries ---
+    val pass1Entries = mutableListOf<EntryDescriptor>()
     val fileEntries = mutableListOf<String>()
 
     ZipInputStream(BufferedInputStream(sourceFile.inputStream(), BUFFER_SIZE)).use { zis ->
@@ -91,21 +91,16 @@ class HybridUnzipTask(
         // Zip Slip: an entry named `../../foo` would resolve outside destDir
         // and write to arbitrary app-private paths.
         assertSafeEntryPath(canonicalDestDir, entry.name)
-        if (entry.isDirectory) {
-          directoriesToCreate.add(entry.name)
-        } else {
+        pass1Entries.add(EntryDescriptor(entry.name, entry.isDirectory))
+        if (!entry.isDirectory) {
           fileEntries.add(entry.name)
-          val parent = File(entry.name).parent
-          if (parent != null) {
-            directoriesToCreate.add(parent)
-          }
         }
         entry = zis.nextEntry
       }
     }
 
-    // Batch create all directories
-    directoriesToCreate.sorted().forEach { dirPath ->
+    // Batch create all directories (sorted parent-before-child).
+    collectDirectoriesToCreate(pass1Entries).forEach { dirPath ->
       File(destDir, dirPath).mkdirs()
     }
 
@@ -135,11 +130,15 @@ class HybridUnzipTask(
 
           extractedCount++
 
-          // Throttle progress updates
+          // Throttle progress updates — decision lives in companion so it can
+          // be exercised in unit tests without driving full extraction.
           val now = System.currentTimeMillis()
-          val shouldUpdate = (now - lastProgressUpdate >= PROGRESS_THROTTLE_MS)
-            || (extractedCount == totalEntries)
-            || (extractedCount == 1)
+          val shouldUpdate = shouldDispatchProgress(
+            now,
+            lastProgressUpdate,
+            extractedCount,
+            totalEntries
+          )
 
           if (shouldUpdate) {
             val progress = if (totalEntries > 0) extractedCount.toDouble() / totalEntries else 0.0
@@ -226,9 +225,12 @@ class HybridUnzipTask(
         extractedCount++
 
         val now = System.currentTimeMillis()
-        val shouldUpdate = (now - lastProgressUpdate >= PROGRESS_THROTTLE_MS)
-          || (extractedCount == totalEntries)
-          || (extractedCount == 1)
+        val shouldUpdate = shouldDispatchProgress(
+          now,
+          lastProgressUpdate,
+          extractedCount,
+          totalEntries
+        )
 
         if (shouldUpdate) {
           val progress = if (totalEntries > 0) extractedCount.toDouble() / totalEntries else 0.0
@@ -269,7 +271,7 @@ class HybridUnzipTask(
 
   companion object {
     private const val BUFFER_SIZE = 65536
-    private const val PROGRESS_THROTTLE_MS = 1000L
+    internal const val PROGRESS_THROTTLE_MS = 1000L
 
     /**
      * Zip Slip mitigation — reject any entry whose resolved canonical path
@@ -291,5 +293,51 @@ class HybridUnzipTask(
         )
       }
     }
+
+    /**
+     * Pure decision: should we fire a progress callback right now? Always
+     * fires for the first extracted file, for the final file, and otherwise
+     * at most every `throttleMs`. Pulled into the companion so a JVM unit
+     * test can pin the exact behaviour without driving the full extraction.
+     */
+    internal fun shouldDispatchProgress(
+      now: Long,
+      lastUpdate: Long,
+      extractedCount: Int,
+      totalEntries: Int,
+      throttleMs: Long = PROGRESS_THROTTLE_MS
+    ): Boolean {
+      if (extractedCount == 1) return true
+      if (extractedCount == totalEntries) return true
+      return (now - lastUpdate) >= throttleMs
+    }
+
+    /**
+     * Two-pass extraction pre-collects the set of directories that need to
+     * exist before file writes start. Pulled out so the algorithm can be
+     * tested independently of streaming I/O.
+     *
+     * Returns a sorted list (parent directories before children) of unique
+     * directory paths derived from the supplied entries. Pure file entries
+     * contribute their parent path; pure directory entries contribute
+     * themselves.
+     */
+    internal fun collectDirectoriesToCreate(
+      entries: List<EntryDescriptor>
+    ): List<String> {
+      val dirs = hashSetOf<String>()
+      for (entry in entries) {
+        if (entry.isDirectory) {
+          dirs.add(entry.name)
+        } else {
+          val parent = File(entry.name).parent
+          if (parent != null) dirs.add(parent)
+        }
+      }
+      return dirs.sorted()
+    }
+
+    /** Test-friendly description of a ZIP entry without depending on the JDK type. */
+    internal data class EntryDescriptor(val name: String, val isDirectory: Boolean)
   }
 }

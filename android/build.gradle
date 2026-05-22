@@ -93,12 +93,19 @@ android {
     main {
       java.srcDirs += ['src/main/java']
     }
+    test {
+      java.srcDirs += ['src/test/java']
+    }
   }
 
   externalNativeBuild {
     cmake {
       path "CMakeLists.txt"
     }
+  }
+
+  testOptions {
+    unitTests.returnDefaultValues = true
   }
 }
 
@@ -114,4 +121,9 @@ dependencies {
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3"
   // zip4j — needed for password-protected zip/unzip (java.util.zip has no password API)
   implementation "net.lingala.zip4j:zip4j:2.11.5"
+
+  // JVM unit tests (no Android framework needed for pure-Kotlin code paths
+  // like Zip Slip path validation).
+  testImplementation "junit:junit:4.13.2"
+  testImplementation "org.jetbrains.kotlin:kotlin-test-junit:1.9.25"
 }
