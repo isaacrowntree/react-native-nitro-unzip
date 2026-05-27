@@ -42,10 +42,15 @@ Archives that previously extracted may now be rejected with `SecurityException`.
 The same threat model addressed on Android is now closed on iOS, implemented
 with iOS/Swift primitives (not a Java translation):
 
-- **Engine change**: `ZIPFoundation` (pure Swift, iterable `Archive` type)
-  replaces `SSZipArchive`. Lets us pre-validate every entry's path BEFORE
-  writing any file and honour `Task.cancel()` between entries — neither
-  was possible with SSZipArchive's all-or-nothing `unzipFile` API.
+- **Engine**: `ZIPFoundation` (pure Swift, iterable `Archive` type) for
+  unencrypted ZIPs. Lets us pre-validate every entry's path BEFORE
+  writing any file and honour `Task.cancel()` between entries.
+  `SSZipArchive` is retained ONLY for password-protected paths (read and
+  write) because ZIPFoundation has no AES support in either direction.
+  Both paths run the same `ExtractionScope.safeURL` validation, so the
+  security properties hold identically — only the underlying decrypt
+  engine differs, and password-path mid-extraction cancel is
+  best-effort (SSZipArchive can't be aborted once started).
 - **Modern Swift Concurrency**: `async`/`await` + `Task` + `Task.checkCancellation()`
   replace `NSLock` + `shouldCancel` + `DispatchQueue.global`. The cancel
   signal flows through structured concurrency — no separate state machine.
@@ -75,9 +80,11 @@ with iOS/Swift primitives (not a Java translation):
 
 ### iOS requirements
 
-- **Pod dependency change**: `SSZipArchive` removed, `ZIPFoundation ~> 0.9`
-  added. `pod install` after upgrading.
-- iOS minimum stays at **15.5+** (ZIPFoundation supports iOS 12+).
+- **Pod dependency change**: `ZIPFoundation ~> 0.9` added (used by
+  default paths). `SSZipArchive ~> 2.5` is retained ONLY for the
+  password-protected read+write paths it uniquely supports on iOS.
+  `pod install` after upgrading.
+- iOS minimum stays at **15.5+**.
 
 ### Test coverage
 
@@ -86,9 +93,13 @@ with iOS/Swift primitives (not a Java translation):
   Turkish-locale case collision, BiDi/control-char rejection, length cap,
   content URI rejection, cached source size, UTF-8 entry names, and a
   perf smoke (1000 entries in ~100ms on dev hardware).
-- **iOS**: an XCTest target with the same coverage surface is the next
-  follow-up — the iOS implementation lands now to close the security gap,
-  test infrastructure follows.
+- **iOS**: 35 SPM-based XCTests covering the full security surface
+  (`UnzipError` code mappings, `ExtractionScope` Zip Slip / NUL / BiDi /
+  control / length / empty / locale / NFC-NFD dedup / symlink ancestry /
+  scheme rejection / constructor preconditions). Run via
+  `swift test` from the repo root — no Xcode UI needed. The Hybrid
+  classes' end-to-end orchestration is intentionally tested via the
+  consuming app's actual extraction rather than mocked at the SPM layer.
 
 ## 0.3.1
 

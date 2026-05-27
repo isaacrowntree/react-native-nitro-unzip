@@ -19,14 +19,15 @@ let package = Package(
   products: [
     .library(name: "NitroUnzipCore", targets: ["NitroUnzipCore"])
   ],
-  dependencies: [
-    .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19")
-  ],
+  dependencies: [],
   targets: [
     .target(
       name: "NitroUnzipCore",
       path: "ios",
-      // Exclude the Nitro-coupled files; SPM compiles only the pure-Swift core.
+      // Compile only the pure-Swift security surface for SPM testing.
+      // The Hybrid classes that integrate Nitro + ZIPFoundation +
+      // SSZipArchive are built via CocoaPods only — their orchestration
+      // is intentionally tested via the consuming app, not via SPM.
       exclude: [
         "HybridUnzip.swift",
         "HybridUnzipTask.swift",
@@ -36,10 +37,7 @@ let package = Package(
     ),
     .testTarget(
       name: "NitroUnzipCoreTests",
-      dependencies: [
-        "NitroUnzipCore",
-        .product(name: "ZIPFoundation", package: "ZIPFoundation")
-      ],
+      dependencies: ["NitroUnzipCore"],
       path: "ios/Tests"
     )
   ]

@@ -17,10 +17,19 @@ Pod::Spec.new do |s|
   s.source_files = 'ios/**/*.{h,m,mm,swift,hpp,cpp}'
 
   # ZIPFoundation — pure-Swift ZIP library with an iterable Archive type.
+  # Used for everything EXCEPT password-protected ZIP CREATION (write).
   # Lets us pre-validate every entry's path BEFORE writing any file and
   # honour Task cancellation between entries — neither possible with
   # SSZipArchive's all-or-nothing unzipFile API.
   s.dependency 'ZIPFoundation', '~> 0.9'
+
+  # SSZipArchive — retained ONLY as a fallback for password-protected
+  # ZIP CREATION. ZIPFoundation's password support is read-only (AES
+  # decrypt) and would otherwise force a regression on the public
+  # `zipWithPassword` API. Read paths and unencrypted-write paths all
+  # use ZIPFoundation; only `ZipEngine.compressWithPassword` reaches
+  # for SSZipArchive.
+  s.dependency 'SSZipArchive', '~> 2.5'
 
   # Add Nitrogen generated files + NitroModules dependency
   load 'nitrogen/generated/ios/NitroUnzip+autolinking.rb'

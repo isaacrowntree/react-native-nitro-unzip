@@ -1,32 +1,25 @@
 import Foundation
 import NitroModules
+import SSZipArchive
 import UIKit
 import ZIPFoundation
 
 /// A single extraction operation as a proper HybridObject instance.
 ///
-/// 0.4.0 iOS migration:
-/// - **Engine**: `ZIPFoundation` (pure Swift, iterable `Archive` type)
-///   replaces SSZipArchive. Lets us pre-validate every entry's path BEFORE
-///   writing any file and honour `Task.cancel()` between entries — neither
-///   was possible with SSZipArchive's all-or-nothing `unzipFile` API.
-/// - **Concurrency**: Swift `async/await` + `Task` + `Task.checkCancellation()`
-///   replaces the `NSLock` + `shouldCancel` + `DispatchQueue.global` model.
-///   No bridge code between the JS-side cancel and the in-flight extraction —
-///   Task cancellation is the contract.
-/// - **Errors**: typed `UnzipError` enum with stable `code` surfaced via
-///   `NSError.userInfo[NitroUnzipErrorCodeKey]`. JS callers branch on
-///   `err.userInfo.NitroUnzipErrorCode` instead of substring-matching
-///   localised messages.
-/// - **Paths**: Foundation `URL` throughout, not `String`. `ExtractionScope`
-///   centralises path validation; `CharacterSet` catches unsafe filename
-///   codepoints (BiDi, controls, NUL).
-/// - **Symlink safety**: per-entry ancestry walk via
-///   `URLResourceKey.isSymbolicLinkKey` before any mkdir/write, matching
-///   the Android `createDirectoryAndVerify` guarantee.
-///
-/// This is parity with Android 0.4.0, implemented purely with
-/// iOS/Foundation primitives — not a Java translation.
+/// 0.4.0 iOS:
+/// - Unencrypted archives use `ZIPFoundation` (pure Swift, iterable
+///   `Archive` type) — gets per-entry validation via `ExtractionScope`
+///   before any write, plus `Task.cancel()` honoured between entries.
+/// - Password-protected archives fall back to `SSZipArchive` (the only
+///   iOS ZIP library that supports AES read+write). Same path-safety
+///   pre-validation via `ExtractionScope.safeURL`, then the actual
+///   decrypt+extract delegates to SSZipArchive. SSZipArchive's
+///   `unzipFile` is all-or-nothing so mid-extraction cancel is
+///   best-effort here.
+/// - `async`/`await` + `Task` + `Task.checkCancellation()` instead of
+///   `NSLock` + `shouldCancel` + `DispatchQueue.global` flag machine.
+/// - Typed `UnzipError` → `NSError.userInfo[NitroUnzipErrorCodeKey]`
+///   so JS can `switch (err.userInfo.NitroUnzipErrorCode)`.
 final class HybridUnzipTask: HybridUnzipTaskSpec {
   let taskId: String
 
@@ -34,9 +27,6 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
   private let destinationPath: String
   private let password: String?
 
-  /// `@Atomic`-equivalent via a serial queue on the instance. iOS-idiomatic
-  /// for shared mutable state between the JS-bridge thread and the
-  /// extraction Task.
   private let lock = NSLock()
   private var progressCallback: ((_ progress: UnzipProgress) -> Void)?
   private var currentTask: Task<UnzipResult, Error>?
@@ -46,8 +36,6 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
   private let progressThrottle: TimeInterval = 1.0
 
   init(zipPath: String, destinationPath: String, password: String? = nil) {
-    // ProcessInfo.globallyUniqueString = UUID + boot-time prefix —
-    // collision-free even across rapid construction on a single core.
     self.taskId = "unzip_\(ProcessInfo.processInfo.globallyUniqueString)"
     self.zipPath = zipPath
     self.destinationPath = destinationPath
@@ -63,9 +51,6 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     lock.unlock()
   }
 
-  /// Cancel an in-flight extraction. No-op if `await()` hasn't been called
-  /// (matches the Android contract: cancel-before-await must not poison
-  /// the cached Promise — the next `await()` proceeds normally).
   func cancel() throws {
     lock.lock()
     let task = currentTask
@@ -73,9 +58,6 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     task?.cancel()
   }
 
-  /// Returns the cached `Promise<UnzipResult>` from the first call. Second
-  /// and subsequent calls return the same Promise rather than launching a
-  /// duplicate extraction that would race writes against the first.
   func await() throws -> Promise<UnzipResult> {
     lock.lock()
     if let cached = awaitedPromise {
@@ -93,29 +75,25 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
 
   // MARK: - Extraction
 
-  /// Top-level extraction driver. Captures a Task handle so `cancel()` can
-  /// reach in and propagate cancellation, manages the background task for
-  /// continued execution if the app backgrounds, and translates typed
-  /// `UnzipError`s into the NSError shape Nitro expects.
   private func runExtraction() async throws -> UnzipResult {
     let task = Task { [weak self] () -> UnzipResult in
       guard let self = self else { throw UnzipError.cancelled.asNSError }
       do {
-        return try await self.extractInner()
+        if self.password != nil {
+          return try await self.extractWithPassword()
+        }
+        return try await self.extractUnencrypted()
       } catch let error as UnzipError {
         throw error.asNSError
       } catch is CancellationError {
         throw UnzipError.cancelled.asNSError
       }
     }
-
     lock.lock()
     currentTask = task
     lock.unlock()
-
     beginBackgroundTask()
     defer { endBackgroundTask() }
-
     do {
       return try await task.value
     } catch {
@@ -126,37 +104,13 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     }
   }
 
-  private func extractInner() async throws -> UnzipResult {
+  /// ZIPFoundation path: per-entry validation + extraction, Task
+  /// cancellation between entries.
+  private func extractUnencrypted() async throws -> UnzipResult {
     let startTime = Date()
-
-    // 1. Validate scheme/empty/destination upfront. Throws typed errors
-    //    that the bridge translates to JS error codes.
-    try ExtractionScope.requireFilesystemPath(destinationPath, paramName: "destinationPath")
-    try ExtractionScope.requireFilesystemPath(zipPath, paramName: "zipPath")
-
-    let scope = try ExtractionScope(destinationPath: destinationPath)
-
-    let cleanZip = ExtractionScope.cleanFilesystemPath(zipPath)
-    let sourceURL = URL(fileURLWithPath: cleanZip)
+    let (scope, sourceURL, sourceSize) = try prepare()
     let fileManager = FileManager.default
-    guard fileManager.fileExists(atPath: sourceURL.path) else {
-      throw UnzipError.sourceNotFound(sourceURL)
-    }
 
-    // Cache source size BEFORE extraction — if the source is unlinked
-    // between extraction completion and result construction (POSIX permits
-    // this while our open Archive holds a reference), the cached size
-    // still produces a valid UnzipResult instead of failing-after-success.
-    let sourceSize: UInt64 = {
-      guard let attrs = try? fileManager.attributesOfItem(atPath: sourceURL.path),
-            let size = attrs[.size] as? UInt64
-      else { return 0 }
-      return size
-    }()
-
-    // 2. Open the archive. ZIPFoundation's `Archive` reads the central
-    //    directory eagerly, so once construction succeeds we have an O(1)
-    //    iterator over entries.
     let archive: Archive
     do {
       archive = try Archive(url: sourceURL, accessMode: .read)
@@ -164,9 +118,6 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
       throw UnzipError.corruptArchive(underlying: error)
     }
 
-    // 3. Pre-validation pass — collect resolved URLs while rejecting any
-    //    malicious entry upfront. Same security contract as Android:
-    //    archive is rejected as a whole; zero partial state on rejection.
     var validated: [(entry: Entry, target: URL)] = []
     var seenDedupKeys = Set<String>()
     var totalFiles = 0
@@ -184,7 +135,6 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
       }
     }
 
-    // 4. Extraction pass.
     var extractedCount = 0
     var lastProgressUpdate = Date()
     var verifiedAncestors = Set<URL>()
@@ -198,8 +148,6 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
         if createdDirs.insert(target).inserted {
           try scope.verifyAncestryClean(of: target, verified: &verifiedAncestors)
           try fileManager.createDirectory(at: target, withIntermediateDirectories: true)
-          // Backstop: post-mkdir, confirm the realised path is still inside
-          // destDir (catches an injected symlink that raced the precheck).
           try verifyInsideDest(target, scope: scope)
         }
       case .file:
@@ -209,102 +157,231 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
           try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
           try verifyInsideDest(parent, scope: scope)
         }
-        // ZIPFoundation's `extract(_:to:)` writes the entry via an internal
-        // buffered stream. If a symlink is injected at `target` between
-        // ancestry-check and the write, the post-write check catches it
-        // and we delete the bogus file.
         do {
           _ = try archive.extract(entry, to: target, skipCRC32: false)
         } catch let error as Archive.ArchiveError {
-          if error == .invalidPassword {
-            throw UnzipError.wrongPassword
-          }
           throw UnzipError.corruptArchive(underlying: error)
         }
         try verifyInsideDest(target, scope: scope)
         extractedCount += 1
-
-        // Throttle progress — matches the Android 1s throttle, with
-        // first-and-last always firing.
-        let now = Date()
-        let shouldEmit = extractedCount == 1
-          || extractedCount == totalFiles
-          || now.timeIntervalSince(lastProgressUpdate) >= progressThrottle
-        if shouldEmit {
-          emitProgress(
-            extractedCount: extractedCount,
-            totalFiles: totalFiles,
-            startTime: startTime,
-            now: now,
-            entry: entry
-          )
-          lastProgressUpdate = now
-        }
+        emitIfDue(
+          extractedCount: extractedCount,
+          totalFiles: totalFiles,
+          startTime: startTime,
+          lastUpdate: &lastProgressUpdate,
+          processedBytes: entry.uncompressedSize
+        )
       case .symlink:
-        // Symlink entries in archives — never honour these; they're a
-        // direct Zip-Slip vector. Treat as a security violation.
+        // Symlink entries in archives are a direct Zip Slip vector.
         throw UnzipError.entryUnsafeName(entry.path)
       }
     }
 
-    let duration = Date().timeIntervalSince(startTime) * 1000 // ms
-    let avgSpeed = duration > 0 ? Double(extractedCount) / (duration / 1000) : 0
-
-    return UnzipResult(
-      success: true,
-      extractedFiles: Double(extractedCount),
-      totalFiles: Double(totalFiles),
-      duration: duration,
-      averageSpeed: avgSpeed,
-      totalBytes: Double(sourceSize)
+    return buildResult(
+      extractedFiles: extractedCount,
+      totalFiles: totalFiles,
+      startTime: startTime,
+      totalBytes: sourceSize
     )
   }
 
-  /// Resolves `url` against the filesystem (following any symlinks) and
-  /// asserts the realised path is still under `scope.destDir`. Catches a
-  /// symlink injected between the pre-mkdir ancestry walk and the actual
-  /// syscall.
+  /// SSZipArchive path for AES-encrypted archives. Pre-validation goes
+  /// through the same `ExtractionScope.safeURL` chain as the
+  /// unencrypted path, so every path-safety guarantee holds identically
+  /// here — only the decrypt+write step differs.
+  private func extractWithPassword() async throws -> UnzipResult {
+    let startTime = Date()
+    let (scope, sourceURL, sourceSize) = try prepare()
+    guard let password = password else {
+      throw UnzipError.cancelled  // unreachable: caller checked
+    }
+
+    guard let entryNames = SSZipArchive.filesInArchive(atPath: sourceURL.path) as? [String] else {
+      throw UnzipError.corruptArchive(underlying: NSError(
+        domain: "NitroUnzip",
+        code: 5,
+        userInfo: [NSLocalizedDescriptionKey: "Could not enumerate ZIP entries"]
+      ))
+    }
+    var seenDedupKeys = Set<String>()
+    var totalFiles = 0
+    for name in entryNames {
+      try Task.checkCancellation()
+      let dedupKey = ExtractionScope.dedupKey(for: name)
+      if !seenDedupKeys.insert(dedupKey).inserted {
+        throw UnzipError.entryDuplicate(name)
+      }
+      _ = try scope.safeURL(forEntry: name)
+      if !name.hasSuffix("/") {
+        totalFiles += 1
+      }
+    }
+
+    // SSZipArchive's unzipFile is synchronous. Bridge to async via a
+    // continuation. Mid-extraction cancel is best-effort — the closure
+    // checks Task.isCancelled but SSZipArchive can't be aborted.
+    var extractedCount = 0
+    var lastProgressUpdate = Date()
+    let throttle = progressThrottle
+
+    let success: Bool = try await withCheckedThrowingContinuation { continuation in
+      DispatchQueue.global(qos: .userInitiated).async {
+        var error: NSError?
+        let result = SSZipArchive.unzipFile(
+          atPath: sourceURL.path,
+          toDestination: scope.destDir.path,
+          overwrite: true,
+          password: password,
+          error: &error,
+          delegate: nil,
+          progressHandler: { _, _, entryNumber, total in
+            if Task.isCancelled { return }
+            let count = Int(entryNumber)
+            extractedCount = count
+            let now = Date()
+            let shouldEmit = count == 1
+              || count == Int(total)
+              || now.timeIntervalSince(lastProgressUpdate) >= throttle
+            if shouldEmit {
+              self.forwardProgress(
+                extractedCount: count,
+                totalFiles: Int(total),
+                startTime: startTime,
+                processedBytes: 0
+              )
+              lastProgressUpdate = now
+            }
+          },
+          completionHandler: nil
+        )
+        if let error = error {
+          // SSZipArchive's error messages are not stable but
+          // "password" tends to appear in the wrong-password message.
+          if error.localizedDescription.lowercased().contains("password") {
+            continuation.resume(throwing: UnzipError.wrongPassword)
+          } else {
+            continuation.resume(throwing: UnzipError.corruptArchive(underlying: error))
+          }
+        } else {
+          continuation.resume(returning: result)
+        }
+      }
+    }
+
+    try Task.checkCancellation()
+    guard success else {
+      throw UnzipError.corruptArchive(underlying: NSError(
+        domain: "NitroUnzip",
+        code: 6,
+        userInfo: [NSLocalizedDescriptionKey: "Password-protected extraction failed"]
+      ))
+    }
+
+    return buildResult(
+      extractedFiles: extractedCount,
+      totalFiles: totalFiles,
+      startTime: startTime,
+      totalBytes: sourceSize
+    )
+  }
+
+  // MARK: - Helpers
+
+  private func prepare() throws -> (ExtractionScope, URL, UInt64) {
+    try ExtractionScope.requireFilesystemPath(destinationPath, paramName: "destinationPath")
+    try ExtractionScope.requireFilesystemPath(zipPath, paramName: "zipPath")
+    let scope = try ExtractionScope(destinationPath: destinationPath)
+    let cleanZip = ExtractionScope.cleanFilesystemPath(zipPath)
+    let sourceURL = URL(fileURLWithPath: cleanZip)
+    let fileManager = FileManager.default
+    guard fileManager.fileExists(atPath: sourceURL.path) else {
+      throw UnzipError.sourceNotFound(sourceURL)
+    }
+    let sourceSize: UInt64 = {
+      guard let attrs = try? fileManager.attributesOfItem(atPath: sourceURL.path),
+            let size = attrs[.size] as? UInt64
+      else { return 0 }
+      return size
+    }()
+    return (scope, sourceURL, sourceSize)
+  }
+
+  /// Confirm `url` (and any symlinks in its ancestry) realises inside
+  /// `scope.destDir`. Deletes the partial write on failure so a
+  /// symlink-redirected file doesn't linger.
   private func verifyInsideDest(_ url: URL, scope: ExtractionScope) throws {
     let real = url.resolvingSymlinksInPath().standardizedFileURL
     if !real.path.hasPrefix(scope.destPrefix) && real != scope.destDir {
-      // Pull the bogus write back — extraction is aborting and we don't
-      // want to leave the symlink-redirected file on disk for an attacker
-      // to reference.
       try? FileManager.default.removeItem(at: url)
       throw UnzipError.entryOutsideDestination(name: url.lastPathComponent, resolved: real)
     }
   }
 
-  private func emitProgress(
+  private func emitIfDue(
     extractedCount: Int,
     totalFiles: Int,
     startTime: Date,
-    now: Date,
-    entry: Entry
+    lastUpdate: inout Date,
+    processedBytes: UInt64
+  ) {
+    let now = Date()
+    let shouldEmit = extractedCount == 1
+      || extractedCount == totalFiles
+      || now.timeIntervalSince(lastUpdate) >= progressThrottle
+    guard shouldEmit else { return }
+    forwardProgress(
+      extractedCount: extractedCount,
+      totalFiles: totalFiles,
+      startTime: startTime,
+      processedBytes: processedBytes
+    )
+    lastUpdate = now
+  }
+
+  private func forwardProgress(
+    extractedCount: Int,
+    totalFiles: Int,
+    startTime: Date,
+    processedBytes: UInt64
   ) {
     lock.lock()
     let callback = progressCallback
     lock.unlock()
     guard let callback = callback else { return }
-
     let progress = totalFiles > 0 ? Double(extractedCount) / Double(totalFiles) : 0
-    let elapsed = now.timeIntervalSince(startTime)
+    let elapsed = Date().timeIntervalSince(startTime)
     let speed = elapsed > 0 ? Double(extractedCount) / elapsed : 0
-
     callback(UnzipProgress(
       extractedFiles: Double(extractedCount),
       totalFiles: Double(totalFiles),
       progress: progress,
       speed: speed,
-      processedBytes: Double(entry.uncompressedSize)
+      processedBytes: Double(processedBytes)
     ))
+  }
+
+  private func buildResult(
+    extractedFiles: Int,
+    totalFiles: Int,
+    startTime: Date,
+    totalBytes: UInt64
+  ) -> UnzipResult {
+    let duration = Date().timeIntervalSince(startTime) * 1000
+    let avgSpeed = duration > 0 ? Double(extractedFiles) / (duration / 1000) : 0
+    return UnzipResult(
+      success: true,
+      extractedFiles: Double(extractedFiles),
+      totalFiles: Double(totalFiles),
+      duration: duration,
+      averageSpeed: avgSpeed,
+      totalBytes: Double(totalBytes)
+    )
   }
 
   // MARK: - Background task management
 
   private func beginBackgroundTask() {
     let bgId = UIApplication.shared.beginBackgroundTask(withName: "NitroUnzip-\(taskId)") { [weak self] in
-      // OS is reclaiming our background time — cancel cleanly.
       self?.lock.lock()
       let task = self?.currentTask
       self?.lock.unlock()

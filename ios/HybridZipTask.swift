@@ -1,13 +1,18 @@
 import Foundation
 import NitroModules
+import SSZipArchive
 import UIKit
 import ZIPFoundation
 
 /// A single zip-creation operation as a proper HybridObject instance.
 ///
-/// 0.4.0 iOS migration: same modernisation as `HybridUnzipTask`. Engine
-/// swapped from SSZipArchive to ZIPFoundation for per-entry control, Swift
-/// Concurrency for cancellation, typed errors, `URL`-based paths.
+/// 0.4.0 iOS:
+/// - Unencrypted archives use `ZIPFoundation` — per-entry control,
+///   Task cancellation between entries.
+/// - Password-protected archives use `SSZipArchive` (the only iOS ZIP
+///   library that supports AES-encrypted CREATE).
+/// - `async`/`await` + `Task` for concurrency. Typed `UnzipError` for
+///   the failure surface.
 final class HybridZipTask: HybridZipTaskSpec {
   let taskId: String
 
@@ -30,8 +35,6 @@ final class HybridZipTask: HybridZipTaskSpec {
     self.password = password
     super.init()
   }
-
-  // MARK: - Spec methods
 
   func onProgress(callback: @escaping (_ progress: ZipProgress) -> Void) throws {
     lock.lock()
@@ -67,7 +70,10 @@ final class HybridZipTask: HybridZipTaskSpec {
     let task = Task { [weak self] () -> ZipResult in
       guard let self = self else { throw UnzipError.cancelled.asNSError }
       do {
-        return try await self.compressInner()
+        if self.password != nil {
+          return try await self.compressWithPassword()
+        }
+        return try await self.compressUnencrypted()
       } catch let error as UnzipError {
         throw error.asNSError
       } catch is CancellationError {
@@ -89,45 +95,10 @@ final class HybridZipTask: HybridZipTaskSpec {
     }
   }
 
-  private func compressInner() async throws -> ZipResult {
+  private func compressUnencrypted() async throws -> ZipResult {
     let startTime = Date()
-    try ExtractionScope.requireFilesystemPath(sourcePath, paramName: "sourcePath")
-    try ExtractionScope.requireFilesystemPath(destinationZipPath, paramName: "destinationZipPath")
-
-    let cleanSource = ExtractionScope.cleanFilesystemPath(sourcePath)
-    let cleanDest = ExtractionScope.cleanFilesystemPath(destinationZipPath)
-
-    let fileManager = FileManager.default
-    let sourceURL = URL(fileURLWithPath: cleanSource)
-    let destURL = URL(fileURLWithPath: cleanDest)
-
-    guard fileManager.fileExists(atPath: sourceURL.path) else {
-      throw UnzipError.sourceNotFound(sourceURL)
-    }
-
-    // NOTE: 0.4.0 leaves password-protected creation unsupported on iOS —
-    // ZIPFoundation's password support is read-only. Surface a clear
-    // error upfront rather than silently writing an unencrypted archive
-    // that consumers would think is encrypted.
-    if password != nil {
-      throw UnzipError.corruptArchive(underlying: NSError(
-        domain: "NitroUnzip",
-        code: 2,
-        userInfo: [NSLocalizedDescriptionKey: "Password-protected zip creation is not supported on iOS in 0.4.0"]
-      ))
-    }
-
-    // Enumerate ALL files relative to source. We do this upfront so we
-    // know the total count for accurate progress and so cancellation
-    // can land between entries cleanly.
-    let relativePaths = try collectRelativePaths(under: sourceURL)
+    let (sourceURL, destURL, relativePaths) = try prepare()
     let totalFiles = relativePaths.count
-
-    // Remove any pre-existing destination — ZIPFoundation's Archive
-    // `.create` mode requires the file not to exist (or it'd append).
-    if fileManager.fileExists(atPath: destURL.path) {
-      try fileManager.removeItem(at: destURL)
-    }
 
     let archive: Archive
     do {
@@ -141,7 +112,6 @@ final class HybridZipTask: HybridZipTaskSpec {
 
     for (index, relativePath) in relativePaths.enumerated() {
       try Task.checkCancellation()
-
       do {
         try archive.addEntry(
           with: relativePath,
@@ -149,46 +119,112 @@ final class HybridZipTask: HybridZipTaskSpec {
           compressionMethod: .deflate
         )
       } catch {
-        // On error mid-write, delete the partial archive so consumers
-        // don't think the failure produced a valid file.
-        try? fileManager.removeItem(at: destURL)
+        try? FileManager.default.removeItem(at: destURL)
         throw UnzipError.corruptArchive(underlying: error)
       }
       compressedCount = index + 1
-
-      let now = Date()
-      let shouldEmit = compressedCount == 1
-        || compressedCount == totalFiles
-        || now.timeIntervalSince(lastProgressUpdate) >= progressThrottle
-      if shouldEmit {
-        emitProgress(
-          compressedCount: compressedCount,
-          totalFiles: totalFiles,
-          startTime: startTime,
-          now: now
-        )
-        lastProgressUpdate = now
-      }
+      emitIfDue(
+        compressedCount: compressedCount,
+        totalFiles: totalFiles,
+        startTime: startTime,
+        lastUpdate: &lastProgressUpdate
+      )
     }
 
-    let duration = Date().timeIntervalSince(startTime) * 1000
-    let avgSpeed = duration > 0 ? Double(compressedCount) / (duration / 1000) : 0
-    let outAttrs = try? fileManager.attributesOfItem(atPath: destURL.path)
-    let outSize = (outAttrs?[.size] as? UInt64).map(Double.init) ?? 0
-
-    return ZipResult(
-      success: true,
-      compressedFiles: Double(compressedCount),
-      totalFiles: Double(totalFiles),
-      duration: duration,
-      averageSpeed: avgSpeed,
-      totalBytes: outSize
+    return buildResult(
+      compressedFiles: compressedCount,
+      totalFiles: totalFiles,
+      startTime: startTime,
+      destURL: destURL
     )
   }
 
-  /// Walk the source directory and return file paths relative to it.
-  /// Skips directory entries — ZIPFoundation creates intermediate dirs as
-  /// needed when entries are added.
+  private func compressWithPassword() async throws -> ZipResult {
+    let startTime = Date()
+    let (sourceURL, destURL, relativePaths) = try prepare()
+    let totalFiles = relativePaths.count
+    guard let password = password else {
+      throw UnzipError.cancelled  // unreachable
+    }
+
+    var lastProgressUpdate = Date()
+    let throttle = progressThrottle
+
+    let success: Bool = try await withCheckedThrowingContinuation { continuation in
+      DispatchQueue.global(qos: .userInitiated).async {
+        let result = SSZipArchive.createZipFile(
+          atPath: destURL.path,
+          withContentsOfDirectory: sourceURL.path,
+          keepParentDirectory: false,
+          withPassword: password,
+          andProgressHandler: { entryNumber, total in
+            if Task.isCancelled { return }
+            let count = Int(entryNumber)
+            let totalInt = Int(total)
+            let now = Date()
+            let shouldEmit = count == 1
+              || count == totalInt
+              || now.timeIntervalSince(lastProgressUpdate) >= throttle
+            if shouldEmit {
+              self.forwardProgress(
+                compressedCount: count,
+                totalFiles: totalInt,
+                startTime: startTime
+              )
+              lastProgressUpdate = now
+            }
+          }
+        )
+        if result {
+          continuation.resume(returning: result)
+        } else {
+          continuation.resume(throwing: UnzipError.corruptArchive(underlying: NSError(
+            domain: "NitroUnzip",
+            code: 3,
+            userInfo: [NSLocalizedDescriptionKey: "Password-protected zip creation failed"]
+          )))
+        }
+      }
+    }
+
+    try Task.checkCancellation()
+    guard success else {
+      try? FileManager.default.removeItem(at: destURL)
+      throw UnzipError.corruptArchive(underlying: NSError(
+        domain: "NitroUnzip",
+        code: 3,
+        userInfo: [NSLocalizedDescriptionKey: "Password-protected zip creation failed"]
+      ))
+    }
+
+    return buildResult(
+      compressedFiles: totalFiles,
+      totalFiles: totalFiles,
+      startTime: startTime,
+      destURL: destURL
+    )
+  }
+
+  // MARK: - Helpers
+
+  private func prepare() throws -> (URL, URL, [String]) {
+    try ExtractionScope.requireFilesystemPath(sourcePath, paramName: "sourcePath")
+    try ExtractionScope.requireFilesystemPath(destinationZipPath, paramName: "destinationZipPath")
+    let cleanSource = ExtractionScope.cleanFilesystemPath(sourcePath)
+    let cleanDest = ExtractionScope.cleanFilesystemPath(destinationZipPath)
+    let fileManager = FileManager.default
+    let sourceURL = URL(fileURLWithPath: cleanSource)
+    let destURL = URL(fileURLWithPath: cleanDest)
+    guard fileManager.fileExists(atPath: sourceURL.path) else {
+      throw UnzipError.sourceNotFound(sourceURL)
+    }
+    if fileManager.fileExists(atPath: destURL.path) {
+      try fileManager.removeItem(at: destURL)
+    }
+    let relativePaths = try collectRelativePaths(under: sourceURL)
+    return (sourceURL, destURL, relativePaths)
+  }
+
   private func collectRelativePaths(under root: URL) throws -> [String] {
     let fileManager = FileManager.default
     var results: [String] = []
@@ -211,27 +247,63 @@ final class HybridZipTask: HybridZipTaskSpec {
     return results
   }
 
-  private func emitProgress(
+  private func emitIfDue(
     compressedCount: Int,
     totalFiles: Int,
     startTime: Date,
-    now: Date
+    lastUpdate: inout Date
+  ) {
+    let now = Date()
+    let shouldEmit = compressedCount == 1
+      || compressedCount == totalFiles
+      || now.timeIntervalSince(lastUpdate) >= progressThrottle
+    guard shouldEmit else { return }
+    forwardProgress(
+      compressedCount: compressedCount,
+      totalFiles: totalFiles,
+      startTime: startTime
+    )
+    lastUpdate = now
+  }
+
+  private func forwardProgress(
+    compressedCount: Int,
+    totalFiles: Int,
+    startTime: Date
   ) {
     lock.lock()
     let callback = progressCallback
     lock.unlock()
     guard let callback = callback else { return }
-
     let progress = totalFiles > 0 ? Double(compressedCount) / Double(totalFiles) : 0
-    let elapsed = now.timeIntervalSince(startTime)
+    let elapsed = Date().timeIntervalSince(startTime)
     let speed = elapsed > 0 ? Double(compressedCount) / elapsed : 0
-
     callback(ZipProgress(
       compressedFiles: Double(compressedCount),
       totalFiles: Double(totalFiles),
       progress: progress,
       speed: speed
     ))
+  }
+
+  private func buildResult(
+    compressedFiles: Int,
+    totalFiles: Int,
+    startTime: Date,
+    destURL: URL
+  ) -> ZipResult {
+    let duration = Date().timeIntervalSince(startTime) * 1000
+    let avgSpeed = duration > 0 ? Double(compressedFiles) / (duration / 1000) : 0
+    let outAttrs = try? FileManager.default.attributesOfItem(atPath: destURL.path)
+    let outSize = (outAttrs?[.size] as? UInt64) ?? 0
+    return ZipResult(
+      success: true,
+      compressedFiles: Double(compressedFiles),
+      totalFiles: Double(totalFiles),
+      duration: duration,
+      averageSpeed: avgSpeed,
+      totalBytes: Double(outSize)
+    )
   }
 
   // MARK: - Background task management
