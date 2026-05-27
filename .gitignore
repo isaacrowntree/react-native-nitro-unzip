@@ -45,3 +45,7 @@ docs/docs/api/
 # OS
 .DS_Store
 Thumbs.db
+
+# Swift Package Manager
+.build/
+Package.resolved

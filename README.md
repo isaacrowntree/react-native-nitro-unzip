@@ -30,9 +30,20 @@ cd ios && pod install
 
 > Requires React Native 0.75+, [Nitro Modules](https://nitro.margelo.com/) 0.35+, iOS 15.5+, **Android minSdk 26+** (since 0.4.0), and Java 17 (Android).
 
-### Platform parity note (0.4.0)
+### Security defences (0.4.0+)
 
-The 0.4.0 release added significant Zip Slip / symlink / case-collision / BiDi-spoofing defences **on Android only**. The same archive that's rejected with `SecurityException` on Android may extract on iOS (which still defers to SSZipArchive's bundled validation). iOS parity is the next planned release. If you're handling untrusted archives, treat the Android-side rejection as the source of truth.
+The 0.4.0 release added the same Zip Slip / symlink / case-collision /
+BiDi-spoofing defences to **both Android and iOS**:
+
+- Path traversal (`../escape`), absolute paths, backslash separators
+- NUL bytes, BiDi overrides/isolates (CVE-2021-42574 class), C0 control characters
+- Length cap (1024 chars), empty entries, dot/dot-dot resolutions
+- Case-insensitive + NFC-normalised duplicate detection (FAT32/HFS+/APFS-CI overwrite prevention)
+- Symlink injection at the entry target OR in any ancestor directory
+
+Errors carry a stable `code` (e.g. `ENTRY_OUTSIDE_DESTINATION`,
+`SYMLINK_IN_ANCESTRY`, `WRONG_PASSWORD`, `CANCELLED`) so JS handlers can
+branch programmatically rather than parsing localised messages.
 
 ### iOS deployment target
 

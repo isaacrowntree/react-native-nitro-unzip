@@ -16,8 +16,11 @@ Pod::Spec.new do |s|
 
   s.source_files = 'ios/**/*.{h,m,mm,swift,hpp,cpp}'
 
-  # SSZipArchive — C-based libz decompression for maximum performance
-  s.dependency 'SSZipArchive', '~> 2.5'
+  # ZIPFoundation — pure-Swift ZIP library with an iterable Archive type.
+  # Lets us pre-validate every entry's path BEFORE writing any file and
+  # honour Task cancellation between entries — neither possible with
+  # SSZipArchive's all-or-nothing unzipFile API.
+  s.dependency 'ZIPFoundation', '~> 0.9'
 
   # Add Nitrogen generated files + NitroModules dependency
   load 'nitrogen/generated/ios/NitroUnzip+autolinking.rb'

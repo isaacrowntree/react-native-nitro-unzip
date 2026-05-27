@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 — Android NIO + ZipFile migration
+## 0.4.0 — Cross-platform security hardening (Android NIO/ZipFile + iOS ZIPFoundation)
 
 **Breaking changes** — please read before upgrading.
 
@@ -37,13 +37,58 @@ Archives that previously extracted may now be rejected with `SecurityException`.
   - The original `CancellationException` cause is preserved via `ensureActive()`.
 - **Pass 1 honours cancellation.** Previously, cancelling during the validation pass had to wait until pass 2 began.
 
-### iOS
+### iOS — parity with the Android security model
 
-No iOS changes in 0.4.0. iOS Zip Slip / cancellation parity is the next planned follow-up.
+The same threat model addressed on Android is now closed on iOS, implemented
+with iOS/Swift primitives (not a Java translation):
+
+- **Engine change**: `ZIPFoundation` (pure Swift, iterable `Archive` type)
+  replaces `SSZipArchive`. Lets us pre-validate every entry's path BEFORE
+  writing any file and honour `Task.cancel()` between entries — neither
+  was possible with SSZipArchive's all-or-nothing `unzipFile` API.
+- **Modern Swift Concurrency**: `async`/`await` + `Task` + `Task.checkCancellation()`
+  replace `NSLock` + `shouldCancel` + `DispatchQueue.global`. The cancel
+  signal flows through structured concurrency — no separate state machine.
+- **Typed `UnzipError` enum**: each case maps to a stable `code` string
+  surfaced via `NSError.userInfo[NitroUnzipErrorCodeKey]`. JS callers
+  can `switch` on `err.userInfo.NitroUnzipErrorCode` instead of
+  substring-matching localised messages.
+- **`URL`-based path safety** (not `String` paths). Uses Foundation's
+  `.standardized` / `.resolvingSymlinksInPath()` and a `CharacterSet` of
+  unsafe codepoints (controls, BiDi, NUL) to validate every entry.
+- **Same security defences ship on both platforms**: Zip Slip path
+  traversal, absolute paths, backslash separators, NUL bytes, BiDi
+  marks/overrides, C0 controls, length cap, empty entries, dot/dotdot
+  resolutions, case-insensitive NFC duplicate detection, symlink
+  injection at the entry path or in any ancestor.
+- **Cancellation actually works**: SSZipArchive's `unzipFile` ran to
+  completion regardless of the cancel flag; with ZIPFoundation we
+  iterate per-entry and check cancellation between each one. Mid-archive
+  cancel halts cleanly.
+- **`await()` is idempotent**: a second call returns the same Promise.
+- **`cancel()` before `await()` is a no-op** (matches the Android
+  contract; doesn't poison the cached Promise).
+- **Scheme rejection**: non-`file://` URIs (e.g. `content://` or
+  picker-returned URLs) throw `DEST_SCHEME_UNSUPPORTED` upfront.
+- **Symlink-as-archive-entry rejected**: ZIP entries marked as symlinks
+  in their external attributes are refused outright — never honoured.
+
+### iOS requirements
+
+- **Pod dependency change**: `SSZipArchive` removed, `ZIPFoundation ~> 0.9`
+  added. `pod install` after upgrading.
+- iOS minimum stays at **15.5+** (ZIPFoundation supports iOS 12+).
 
 ### Test coverage
 
-64 unit tests (was 21 in 0.3.0). Coverage added for: symlink-at-target, symlink-as-intermediate-parent, NFD/NFC normalisation collision, Turkish-locale case collision, BiDi/control-char rejection, length cap, content URI rejection, cached source size, UTF-8 entry names, and a perf smoke test (1000 entries in ~100ms on dev machine).
+- **Android**: 64 unit tests (was 21 in 0.3.0). Coverage for symlink-at-target,
+  symlink-as-intermediate-parent, NFD/NFC normalisation collision,
+  Turkish-locale case collision, BiDi/control-char rejection, length cap,
+  content URI rejection, cached source size, UTF-8 entry names, and a
+  perf smoke (1000 entries in ~100ms on dev hardware).
+- **iOS**: an XCTest target with the same coverage surface is the next
+  follow-up — the iOS implementation lands now to close the security gap,
+  test infrastructure follows.
 
 ## 0.3.1
 
