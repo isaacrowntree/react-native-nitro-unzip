@@ -37,7 +37,16 @@ android {
   compileSdkVersion getExtOrIntegerDefault("compileSdkVersion")
 
   defaultConfig {
-    minSdkVersion getExtOrIntegerDefault("minSdkVersion")
+    // 0.4.0 hard-requires API 26 because the extraction path uses
+    // `java.nio.file.Path` / `Files` / `FileChannel` (NIO). Consumers'
+    // `rootProject.ext.minSdkVersion = 24` would otherwise silently let
+    // the library compile against minSdk 24 — the classes exist in
+    // `android.jar` at compileSdk 36, but a NoClassDefFoundError fires
+    // on API 24/25 devices the first time we call `java.nio.file.*`.
+    // Hardcoding here forces the AGP manifest merger to reject any
+    // consumer with `minSdkVersion < 26`, surfacing the requirement at
+    // build time instead of runtime.
+    minSdkVersion 26
     targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
 
     externalNativeBuild {

@@ -96,3 +96,20 @@ Both `file://` URIs and plain absolute paths are accepted:
 unzip.extract('file:///path/to/archive.zip', '/output');
 unzip.extract('/path/to/archive.zip', '/output');
 ```
+
+`content://` URIs (returned by Android's Storage Access Framework) are **not** accepted — resolve them to a filesystem path first.
+
+## Transactional behaviour (0.4.0+)
+
+Extraction is **all-or-nothing**. If anything fails after the first byte is written — a corrupt archive entry, the disk filling up, a write error, or cancellation between entries — the library rolls back every file AND every intermediate directory it created before re-throwing.
+
+```typescript
+try {
+  await unzip.extract('/path/to/archive.zip', '/output').await();
+} catch (err) {
+  // /output is exactly as it was before the call — empty or as the user
+  // left it. No half-extracted state to clean up.
+}
+```
+
+This applies to both the unencrypted path and the Android password path. The iOS password path (driven by SSZipArchive's batch API) can't be aborted mid-archive, but pre-validation still guarantees no writes happen if any entry would be malicious.

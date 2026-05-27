@@ -61,8 +61,12 @@ if (result.success) {
 | Field | Type | Description |
 |---|---|---|
 | `success` | `boolean` | Whether compression completed |
-| `compressedFiles` | `number` | Total files compressed |
-| `totalFiles` | `number` | Total files to compress |
+| `compressedFiles` | `number` | Total **files** compressed (excludes empty placeholder dirs — see note below) |
+| `totalFiles` | `number` | Total **files** to compress |
 | `duration` | `number` | Duration in milliseconds |
 | `averageSpeed` | `number` | Average files per second |
 | `totalBytes` | `number` | Total bytes written to the zip file |
+
+:::note Empty directory preservation (0.4.0+)
+Empty placeholder directories in the source (e.g. `cache/`, `logs/today/`) are preserved as trailing-slash entries in the archive, so a zip → unzip round trip keeps them. They do **not** count toward `compressedFiles` / `totalFiles` — those fields use the same files-only semantics as the unzip-side `extractedFiles` / `totalFiles`, so cross-platform round-trip counts match.
+:::

@@ -93,11 +93,13 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     lock.lock()
     currentTask = task
     lock.unlock()
-    beginBackgroundTask()
-    defer { endBackgroundTask() }
+    await beginBackgroundTask()
     do {
-      return try await task.value
+      let result = try await task.value
+      await endBackgroundTask()
+      return result
     } catch {
+      await endBackgroundTask()
       if Task.isCancelled || task.isCancelled {
         throw UnzipError.cancelled.asNSError
       }
@@ -140,44 +142,69 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     var lastProgressUpdate = Date()
     var verifiedAncestors = Set<URL>()
     var createdDirs = Set<URL>()
+    // Track everything we wrote so we can roll back on a mid-stream
+    // failure (corrupt entry, disk full, cancellation between entries).
+    // CHANGELOG promises "zero partial state on rejection" — that was
+    // only true for the pre-validation rejection path before; this
+    // closes the gap for mid-extraction failures too.
+    var extractedTargets: [URL] = []
+    var createdDirTargets: [URL] = []
 
-    for (entry, target) in validated {
-      try Task.checkCancellation()
+    do {
+      for (entry, target) in validated {
+        try Task.checkCancellation()
 
-      switch entry.type {
-      case .directory:
-        if createdDirs.insert(target).inserted {
-          try scope.verifyAncestryClean(of: target, verified: &verifiedAncestors)
-          try fileManager.createDirectory(at: target, withIntermediateDirectories: true)
-          try verifyInsideDest(target, scope: scope)
+        switch entry.type {
+        case .directory:
+          if createdDirs.insert(target).inserted {
+            try scope.verifyAncestryClean(of: target, verified: &verifiedAncestors)
+            try createTrackedDirectory(
+              at: target,
+              scope: scope,
+              fileManager: fileManager,
+              createdDirs: &createdDirs,
+              createdDirTargets: &createdDirTargets
+            )
+          }
+        case .file:
+          let parent = target.deletingLastPathComponent()
+          if createdDirs.insert(parent).inserted {
+            try scope.verifyAncestryClean(of: parent, verified: &verifiedAncestors)
+            try createTrackedDirectory(
+              at: parent,
+              scope: scope,
+              fileManager: fileManager,
+              createdDirs: &createdDirs,
+              createdDirTargets: &createdDirTargets
+            )
+          }
+          // Stream-write via POSIX open(O_NOFOLLOW) so the kernel refuses
+          // to follow a symlink that raced into the target path between
+          // ancestry validation and this write.
+          try writeEntryNoFollow(entry: entry, target: target, archive: archive)
+          extractedTargets.append(target)
+          extractedCount += 1
+          emitIfDue(
+            extractedCount: extractedCount,
+            totalFiles: totalFiles,
+            startTime: startTime,
+            lastUpdate: &lastProgressUpdate,
+            processedBytes: entry.uncompressedSize
+          )
+        case .symlink:
+          // Symlink entries in archives are a direct Zip Slip vector.
+          throw UnzipError.entryUnsafeName(entry.path)
         }
-      case .file:
-        let parent = target.deletingLastPathComponent()
-        if createdDirs.insert(parent).inserted {
-          try scope.verifyAncestryClean(of: parent, verified: &verifiedAncestors)
-          try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
-          try verifyInsideDest(parent, scope: scope)
-        }
-        // Stream-write via POSIX open(O_NOFOLLOW) so the kernel refuses
-        // to follow a symlink that raced into the target path between
-        // ancestry validation and this write. This replaces a per-file
-        // resolvingSymlinksInPath() syscall (which would otherwise run
-        // 10k+ times on nested archives) with a single open() that
-        // either succeeds or fails fast — much faster on deeply nested
-        // workloads (tile sets, asset bundles).
-        try writeEntryNoFollow(entry: entry, target: target, archive: archive)
-        extractedCount += 1
-        emitIfDue(
-          extractedCount: extractedCount,
-          totalFiles: totalFiles,
-          startTime: startTime,
-          lastUpdate: &lastProgressUpdate,
-          processedBytes: entry.uncompressedSize
-        )
-      case .symlink:
-        // Symlink entries in archives are a direct Zip Slip vector.
-        throw UnzipError.entryUnsafeName(entry.path)
       }
+    } catch {
+      // Mid-extraction failure — roll back so we don't leave a half-
+      // extracted archive on disk that looks complete. Logic lives in
+      // `PartialExtractionRollback` so it can be unit-tested directly.
+      PartialExtractionRollback.rollback(
+        files: extractedTargets,
+        directories: createdDirTargets
+      )
+      throw error
     }
 
     return buildResult(
@@ -332,8 +359,11 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     }
     do {
       _ = try archive.extract(entry, bufferSize: 65536, skipCRC32: false) { data in
-        // FileHandle.write throws on failure on iOS 13.4+; we're at 15.5+.
-        try? handle.write(contentsOf: data)
+        // Propagate write failures (disk full, FD closed, ENOSPC) up
+        // through ZIPFoundation's throwing consumer — the prior `try?`
+        // silently dropped them and let extract think it succeeded,
+        // committing a truncated file to disk and skipping rollback.
+        try handle.write(contentsOf: data)
       }
     } catch let error as Archive.ArchiveError {
       // Clean up partial write on failure so a half-decompressed file
@@ -363,6 +393,53 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
       return size
     }()
     return (scope, sourceURL, sourceSize)
+  }
+
+  /// Create `target` plus every missing ancestor between it and
+  /// `scope.destDir`, recording each newly-created level in
+  /// `createdDirTargets` for rollback. The previous one-shot
+  /// `createDirectory(withIntermediateDirectories: true)` call left
+  /// intermediates untracked — a mid-stream failure would only rewind the
+  /// leaf, leaving stranded empty dirs in dest. Order matters: each level
+  /// is appended *before* `verifyInsideDest` runs against it, so a
+  /// symlink-race that flunks `verifyInsideDest` still gets rolled back
+  /// (rather than silently leaking the dir we just created).
+  private func createTrackedDirectory(
+    at target: URL,
+    scope: ExtractionScope,
+    fileManager: FileManager,
+    createdDirs: inout Set<URL>,
+    createdDirTargets: inout [URL]
+  ) throws {
+    // Walk from target upward, collecting ancestors that don't exist yet
+    // and stop at destDir (we never delete destDir on rollback).
+    var toCreate: [URL] = []
+    var cursor = target.standardizedFileURL
+    let destDir = scope.destDir.standardizedFileURL
+    while cursor != destDir {
+      var isDir: ObjCBool = false
+      let exists = fileManager.fileExists(atPath: cursor.path, isDirectory: &isDir)
+      if exists && isDir.boolValue {
+        break
+      }
+      toCreate.append(cursor)
+      let parent = cursor.deletingLastPathComponent().standardizedFileURL
+      // Defensive: if deletingLastPathComponent stops making progress
+      // (e.g. cursor already == "/"), break to avoid an infinite loop.
+      // In practice safeURL guarantees `target` lives under destDir.
+      if parent == cursor { break }
+      cursor = parent
+    }
+    // Create deepest-first... actually shallowest-first so each level's
+    // parent exists when we create the child.
+    for level in toCreate.reversed() {
+      try fileManager.createDirectory(at: level, withIntermediateDirectories: false)
+      // Track BEFORE verifyInsideDest so a verify failure still triggers
+      // rollback for this newly-created level.
+      createdDirs.insert(level)
+      createdDirTargets.append(level)
+      try verifyInsideDest(level, scope: scope)
+    }
   }
 
   /// Confirm `url` (and any symlinks in its ancestry) realises inside
@@ -438,27 +515,43 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
   }
 
   // MARK: - Background task management
+  //
+  // `UIApplication.shared` is `@MainActor` per the Swift overlay, so
+  // any access from a non-Main context (these methods run inside the
+  // Promise.async background Task) triggers strict-concurrency errors
+  // in Swift 6. Wrap the calls in `MainActor.run` — runtime overhead
+  // is one Main-thread hop per extraction (twice per extract: begin +
+  // end), which is negligible vs the actual extraction work.
 
-  private func beginBackgroundTask() {
-    let bgId = UIApplication.shared.beginBackgroundTask(withName: "NitroUnzip-\(taskId)") { [weak self] in
-      self?.lock.lock()
-      let task = self?.currentTask
-      self?.lock.unlock()
-      task?.cancel()
-      self?.endBackgroundTask()
+  private func beginBackgroundTask() async {
+    let bgId = await MainActor.run {
+      UIApplication.shared.beginBackgroundTask(withName: "NitroUnzip-\(taskId)") { [weak self] in
+        // Expiration handler can fire on any thread; route cancellation
+        // through the task pointer without re-entering the actor.
+        guard let self = self else { return }
+        self.lock.lock()
+        let task = self.currentTask
+        self.lock.unlock()
+        task?.cancel()
+        // End the bg task on Main without blocking the OS expiration
+        // callback — fire-and-forget Task is fine here.
+        Task { await self.endBackgroundTask() }
+      }
     }
     lock.lock()
     backgroundTaskId = bgId
     lock.unlock()
   }
 
-  private func endBackgroundTask() {
+  private func endBackgroundTask() async {
     lock.lock()
     let bgId = backgroundTaskId
     backgroundTaskId = .invalid
     lock.unlock()
     if bgId != .invalid {
-      UIApplication.shared.endBackgroundTask(bgId)
+      await MainActor.run {
+        UIApplication.shared.endBackgroundTask(bgId)
+      }
     }
   }
 }

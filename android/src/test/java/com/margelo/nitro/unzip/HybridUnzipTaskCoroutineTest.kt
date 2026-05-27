@@ -179,8 +179,9 @@ class HybridUnzipTaskCoroutineTest {
   @Test
   fun `extractCore propagates exceptions thrown from the progress callback during pass 2`() = runTest {
     // A throwing progress callback simulates downstream failure during
-    // pass 2 (e.g. JS-side handler error). The exception should propagate
-    // and partial files written prior to the throw should remain on disk.
+    // extraction (e.g. JS-side handler error). The exception must
+    // propagate AND partial state must be rolled back — 0.4.0 contract
+    // matches the iOS side: zero partial state on mid-stream failure.
     val zip = ZipFixtures.writeFlatZip(newZipFile(), count = 10)
     val dest = newDestDir()
 
@@ -197,10 +198,9 @@ class HybridUnzipTaskCoroutineTest {
       )
     }
     assertTrue(ex.message!!.contains("downstream failure"))
-    // Files 1..3 were written before the callback at extractedFiles==3 threw;
-    // remaining 4..10 never started. Two-pass behaviour: partial state is
-    // surfaced to the caller, not silently swallowed.
-    assertEquals(3, dest.listFiles()?.size ?: 0)
+    // Rollback contract: every file written before the throw is removed.
+    // The dest dir itself is preserved (extraction never deletes destDir).
+    assertEquals(0, dest.listFiles()?.size ?: 0)
   }
 
   @Test
@@ -877,5 +877,171 @@ class HybridUnzipTaskCoroutineTest {
       "expected nested structure to be preserved"
     )
     println("extractCore (nested): 1000 entries in ${elapsedMs}ms (~${1000 * 1000 / elapsedMs} files/s)")
+  }
+
+  @Test
+  fun `extractCore preserves empty placeholder directories from explicit dir entries`() = runTest {
+    // Round-trip parity contract with iOS HybridZipTask.collectRelativePaths:
+    // the zip side emits trailing-slash entries for empty directories
+    // (cache/, logs/, etc.) — the unzip side must materialise them so a
+    // zip→unzip round trip doesn't silently lose placeholders.
+    val zip = newZipFile()
+    ZipFixtures.writeZip(zip, listOf(
+      "cache/" to ByteArray(0),
+      "logs/today/" to ByteArray(0),
+      "data/keep.txt" to byteArrayOf(1)
+    ))
+    val dest = newDestDir()
+
+    HybridUnzipTask.extractCore(
+      zipPath = zip.absolutePath,
+      destinationPath = dest.absolutePath
+    )
+
+    assertTrue(File(dest, "cache").isDirectory, "empty top-level placeholder must exist")
+    assertTrue(File(dest, "logs/today").isDirectory, "nested empty placeholder must exist")
+    assertTrue(File(dest, "data/keep.txt").isFile)
+  }
+
+  @Test
+  fun `extractCore preserves directories whose only entry is the explicit dir marker`() = runTest {
+    // Stronger variant: an archive whose ONLY entries are directories
+    // (no files at all). The two-pass extractor's pass 1 must still
+    // create the dirs even with zero file entries to trigger
+    // parent-prefix dir creation.
+    val zip = newZipFile()
+    ZipFixtures.writeZip(zip, listOf(
+      "alpha/" to ByteArray(0),
+      "alpha/beta/" to ByteArray(0),
+      "alpha/beta/gamma/" to ByteArray(0)
+    ))
+    val dest = newDestDir()
+
+    HybridUnzipTask.extractCore(
+      zipPath = zip.absolutePath,
+      destinationPath = dest.absolutePath
+    )
+
+    assertTrue(File(dest, "alpha").isDirectory)
+    assertTrue(File(dest, "alpha/beta").isDirectory)
+    assertTrue(File(dest, "alpha/beta/gamma").isDirectory)
+  }
+
+  @Test
+  fun `extractWithPasswordCore creates nested parent directories from file paths`() = runTest {
+    // Password path: zip4j writes files (not standalone dir entries), but
+    // the unzip side must still create parent directories from file paths.
+    // Test that `a/b/c/d/file.txt` materialises the full chain.
+    val zip = newZipFile()
+    ZipFixtures.writeProtectedZip(zip, "pw", listOf(
+      "a/b/c/d/file.txt" to byteArrayOf(1, 2, 3),
+      "a/b/sibling.txt" to byteArrayOf(4)
+    ))
+    val dest = newDestDir()
+
+    HybridUnzipTask.extractWithPasswordCore(
+      zipPath = zip.absolutePath,
+      destinationPath = dest.absolutePath,
+      password = "pw"
+    )
+
+    assertTrue(File(dest, "a").isDirectory)
+    assertTrue(File(dest, "a/b").isDirectory)
+    assertTrue(File(dest, "a/b/c").isDirectory)
+    assertTrue(File(dest, "a/b/c/d").isDirectory)
+    assertTrue(File(dest, "a/b/c/d/file.txt").isFile)
+    assertTrue(File(dest, "a/b/sibling.txt").isFile)
+  }
+
+  @Test
+  fun `extractCore rolls back created directories and files on mid-stream failure`() = runTest {
+    // Build an archive whose entries land in nested dirs that don't exist
+    // yet (`alpha/beta/0..4.bin`). The progress callback throws after the
+    // 2nd file. Rollback must remove BOTH the partial files AND the
+    // intermediate directories (`alpha`, `alpha/beta`) — the prior fix
+    // tracked only the leaf dir, leaving stranded empties behind.
+    val zip = newZipFile()
+    val payload = ByteArray(32) { it.toByte() }
+    ZipFixtures.writeZip(zip, (0 until 5).map { i ->
+      "alpha/beta/file_$i.bin" to payload
+    })
+    val dest = newDestDir()
+
+    val ex = assertFailsWith<RuntimeException> {
+      HybridUnzipTask.extractCore(
+        zipPath = zip.absolutePath,
+        destinationPath = dest.absolutePath,
+        throttleMs = 0L,
+        progressCallback = { p ->
+          if (p.extractedFiles >= 2) throw RuntimeException("forced")
+        }
+      )
+    }
+    assertTrue(ex.message!!.contains("forced"))
+    // No files survive.
+    assertFalse(File(dest, "alpha/beta/file_0.bin").exists())
+    assertFalse(File(dest, "alpha/beta/file_1.bin").exists())
+    // No intermediate dirs either — the rollback walks dirs deepest-first.
+    assertFalse(File(dest, "alpha/beta").exists())
+    assertFalse(File(dest, "alpha").exists())
+    // destDir itself is preserved.
+    assertTrue(dest.isDirectory)
+  }
+
+  @Test
+  fun `rollbackPartialExtraction is a no-op for empty inputs`() = runTest {
+    // Direct unit coverage of the helper — mirrors the iOS SPM test.
+    // No setup, no exceptions, no side effects.
+    HybridUnzipTask.rollbackPartialExtraction(emptyList(), emptyList())
+  }
+
+  @Test
+  fun `rollbackPartialExtraction tolerates missing targets`() = runTest {
+    val dest = newDestDir()
+    val phantom = File(dest, "never-existed.bin").toPath()
+    val ghostDir = File(dest, "ghost-dir").toPath()
+    // Must not throw; both targets are absent.
+    HybridUnzipTask.rollbackPartialExtraction(listOf(phantom), listOf(ghostDir))
+  }
+
+  @Test
+  fun `rollbackPartialExtraction deletes deeper directories before shallower ones`() = runTest {
+    val dest = newDestDir()
+    val shallow = File(dest, "outer-with-long-name-zzzzzzzzzz").apply { mkdirs() }.toPath()
+    val deepRoot = File(dest, "a").apply { mkdirs() }.toPath()
+    val deepMid = File(dest, "a/b").apply { mkdirs() }.toPath()
+    val deepLeaf = File(dest, "a/b/c").apply { mkdirs() }.toPath()
+
+    // Intentionally unsorted — the rollback must reorder by depth so the
+    // leaf gets deleted before its parents.
+    HybridUnzipTask.rollbackPartialExtraction(
+      files = emptyList(),
+      directories = listOf(deepRoot, shallow, deepLeaf, deepMid)
+    )
+
+    assertFalse(shallow.toFile().exists())
+    assertFalse(deepLeaf.toFile().exists())
+    assertFalse(deepMid.toFile().exists())
+    assertFalse(deepRoot.toFile().exists())
+  }
+
+  @Test
+  fun `extractCore handles archive with zero entries without crashing`() = runTest {
+    // Empty-archive degenerate case: zip with no central-directory entries.
+    // Should succeed, report 0 files, and leave destDir empty.
+    val zip = newZipFile()
+    ZipFixtures.writeZip(zip, emptyList())
+    val dest = newDestDir()
+
+    val result = HybridUnzipTask.extractCore(
+      zipPath = zip.absolutePath,
+      destinationPath = dest.absolutePath
+    )
+
+    assertEquals(0.0, result.extractedFiles)
+    assertEquals(0.0, result.totalFiles)
+    // Destination exists, but only the dest dir itself was created.
+    assertTrue(dest.isDirectory)
+    assertEquals(0, dest.listFiles()?.size ?: -1)
   }
 }

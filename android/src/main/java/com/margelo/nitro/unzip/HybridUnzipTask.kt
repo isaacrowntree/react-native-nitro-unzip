@@ -358,20 +358,25 @@ class HybridUnzipTask(
      * entry. As a backstop the post-mkdir `toRealPath` check still fires
      * in case the FS races us.
      *
-     * `createdDirs` is optional: when extracting an explicit directory
-     * entry we add the target itself; when creating a parent for a file
-     * entry, the caller adds the parent to its own set AFTER this call
-     * succeeds (so a thrown SecurityException doesn't poison the set).
+     * Tracking for rollback: each newly-created level is appended to
+     * `createdDirsList` so a mid-extraction failure can roll the lot back
+     * (deepest-first). The previous one-shot `Files.createDirectories`
+     * call hid intermediates from the tracking set — only the leaf was
+     * recorded, so a mid-stream throw left every parent dir orphaned
+     * in dest. We now create one level at a time and record each.
+     *
+     * `createdDirs` is the dedup set: once a path has been created, the
+     * caller skips re-entering this function for that path.
      */
     private fun createDirectoryAndVerify(
       target: Path,
       destDir: Path,
       verifiedAncestors: HashSet<Path>,
-      createdDirs: HashSet<Path>?
+      createdDirs: HashSet<Path>,
+      createdDirsList: ArrayList<Path>
     ) {
       // Walk from target back toward destDir. For each existing ancestor,
-      // refuse if it's a symlink — `Files.createDirectories` would follow
-      // it. Stop at destDir itself or at any path already verified clean.
+      // refuse if it's a symlink — even a per-level create would follow it.
       var cur: Path? = target
       while (cur != null && cur != destDir && cur !in verifiedAncestors) {
         if (Files.exists(cur, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(cur)) {
@@ -382,17 +387,61 @@ class HybridUnzipTask(
         verifiedAncestors.add(cur)
         cur = cur.parent
       }
-      Files.createDirectories(target)
-      // Post-mkdir backstop: even if no ancestor was a symlink at the
-      // pre-check, a concurrent process could have created one in the
-      // race window. toRealPath resolves any symlinks created since.
-      val realTarget = target.toRealPath()
-      if (!realTarget.startsWith(destDir)) {
-        throw SecurityException(
-          "Refusing to extract: directory $target resolves outside destination via symlink ($realTarget)"
-        )
+
+      // Build the list of missing levels from destDir down to target, then
+      // create each in order — recording it BEFORE the per-level
+      // toRealPath check, so a failed verify still rolls back the dir we
+      // just created.
+      val toCreate = ArrayList<Path>()
+      var cursor: Path? = target
+      while (cursor != null && cursor != destDir && !Files.exists(cursor, LinkOption.NOFOLLOW_LINKS)) {
+        toCreate.add(cursor)
+        cursor = cursor.parent
       }
-      createdDirs?.add(target)
+      // Shallowest-first so each parent exists when we create the child.
+      for (level in toCreate.asReversed()) {
+        Files.createDirectory(level)
+        if (createdDirs.add(level)) {
+          createdDirsList.add(level)
+        }
+        // Post-mkdir backstop: a concurrent process could race a symlink
+        // into the path. toRealPath resolves any symlinks created since.
+        val realLevel = level.toRealPath()
+        if (!realLevel.startsWith(destDir)) {
+          throw SecurityException(
+            "Refusing to extract: directory $level resolves outside destination via symlink ($realLevel)"
+          )
+        }
+      }
+    }
+
+    /**
+     * Best-effort cleanup of a partial extraction. Called when the
+     * extraction loop throws mid-stream — corrupt entry, disk full,
+     * cancellation between entries, etc. Without this, a half-extracted
+     * archive lingers on disk and looks complete to the calling app.
+     * Cross-platform parity with iOS's `PartialExtractionRollback`.
+     *
+     * Deletion order:
+     * - Files first, last-written-first (the truncated tail entry goes
+     *   first if cancellation landed mid-write).
+     * - Then directories sorted by descending depth so children are
+     *   removed before parents (a non-empty parent would fail).
+     * - All deletes are best-effort: a failure on one entry doesn't
+     *   stop the loop.
+     */
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal fun rollbackPartialExtraction(
+      files: List<Path>,
+      directories: List<Path>
+    ) {
+      for (path in files.asReversed()) {
+        try { Files.deleteIfExists(path) } catch (_: IOException) { /* best-effort */ }
+      }
+      val sortedDirs = directories.sortedByDescending { it.nameCount }
+      for (dir in sortedDirs) {
+        try { Files.deleteIfExists(dir) } catch (_: IOException) { /* best-effort */ }
+      }
     }
 
     /**
@@ -519,36 +568,43 @@ class HybridUnzipTask(
 
         // Extraction pass.
         val createdDirs = HashSet<Path>()
+        val createdDirsList = ArrayList<Path>()
+        val extractedFiles = ArrayList<Path>()
         val verifiedAncestors = HashSet<Path>()
         var extractedCount = 0
         var lastProgressUpdate = ctx.startTime
         val buffer = ByteArray(BUFFER_SIZE)
 
-        for ((entry, target) in validated) {
-          checkNotCancelled(isCancelledProvider)
+        try {
+          for ((entry, target) in validated) {
+            checkNotCancelled(isCancelledProvider)
 
-          if (entry.isDirectory) {
-            createDirectoryAndVerify(target, ctx.destDir, verifiedAncestors, createdDirs)
-            continue
-          }
+            if (entry.isDirectory) {
+              createDirectoryAndVerify(target, ctx.destDir, verifiedAncestors, createdDirs, createdDirsList)
+              continue
+            }
 
-          // Lazy mkdir of parent directories. Add to createdDirs only AFTER
-          // createDirectoryAndVerify succeeds — a thrown SecurityException
-          // would otherwise leave the set claiming the parent is safe.
-          val parent = target.parent
-          if (parent != null && parent !in createdDirs) {
-            createDirectoryAndVerify(parent, ctx.destDir, verifiedAncestors, null)
-            createdDirs.add(parent)
-          }
+            // Lazy mkdir of parent directories.
+            val parent = target.parent
+            if (parent != null && parent !in createdDirs) {
+              createDirectoryAndVerify(parent, ctx.destDir, verifiedAncestors, createdDirs, createdDirsList)
+            }
 
-          zipFile.getInputStream(entry).use { input ->
-            writeEntry(target, input, buffer, isCancelledProvider)
+            zipFile.getInputStream(entry).use { input ->
+              writeEntry(target, input, buffer, isCancelledProvider)
+            }
+            extractedFiles.add(target)
+            extractedCount++
+            lastProgressUpdate = emitProgressIfDue(
+              clock(), ctx.startTime, lastProgressUpdate,
+              extractedCount, totalEntries, throttleMs, progressCallback
+            )
           }
-          extractedCount++
-          lastProgressUpdate = emitProgressIfDue(
-            clock(), ctx.startTime, lastProgressUpdate,
-            extractedCount, totalEntries, throttleMs, progressCallback
-          )
+        } catch (t: Throwable) {
+          // Mid-extraction failure — roll back so a half-extracted archive
+          // doesn't masquerade as a complete one. Matches iOS parity.
+          rollbackPartialExtraction(extractedFiles, createdDirsList)
+          throw t
         }
 
         buildResult(extractedCount, totalEntries, ctx.startTime, ctx.sourceSize, clock)
@@ -606,38 +662,44 @@ class HybridUnzipTask(
         }
 
         val createdDirs = HashSet<Path>()
+        val createdDirsList = ArrayList<Path>()
+        val extractedFiles = ArrayList<Path>()
         val verifiedAncestors = HashSet<Path>()
         var extractedCount = 0
         var lastProgressUpdate = ctx.startTime
         val buffer = ByteArray(BUFFER_SIZE)
 
-        for ((header, target) in validated) {
-          checkNotCancelled(isCancelledProvider)
+        try {
+          for ((header, target) in validated) {
+            checkNotCancelled(isCancelledProvider)
 
-          if (header.isDirectory) {
-            createDirectoryAndVerify(target, ctx.destDir, verifiedAncestors, createdDirs)
-            continue
-          }
-          // Add to createdDirs only AFTER createDirectoryAndVerify succeeds.
-          val parent = target.parent
-          if (parent != null && parent !in createdDirs) {
-            createDirectoryAndVerify(parent, ctx.destDir, verifiedAncestors, null)
-            createdDirs.add(parent)
-          }
+            if (header.isDirectory) {
+              createDirectoryAndVerify(target, ctx.destDir, verifiedAncestors, createdDirs, createdDirsList)
+              continue
+            }
+            val parent = target.parent
+            if (parent != null && parent !in createdDirs) {
+              createDirectoryAndVerify(parent, ctx.destDir, verifiedAncestors, createdDirs, createdDirsList)
+            }
 
-          // zip4j's getInputStream returns a decrypting InputStream; we pipe
-          // through writeEntry for NIO/NOFOLLOW_LINKS write semantics.
-          // (Note: assertSafeEntryPath is the sole path-safety check for this
-          // path — we bypass zip4j's extractFile-time validation by routing
-          // through getInputStream. Don't remove assertSafeEntryPath.)
-          zipFile.getInputStream(header).use { input ->
-            writeEntry(target, input, buffer, isCancelledProvider)
+            // zip4j's getInputStream returns a decrypting InputStream; we pipe
+            // through writeEntry for NIO/NOFOLLOW_LINKS write semantics.
+            // (Note: assertSafeEntryPath is the sole path-safety check for this
+            // path — we bypass zip4j's extractFile-time validation by routing
+            // through getInputStream. Don't remove assertSafeEntryPath.)
+            zipFile.getInputStream(header).use { input ->
+              writeEntry(target, input, buffer, isCancelledProvider)
+            }
+            extractedFiles.add(target)
+            extractedCount++
+            lastProgressUpdate = emitProgressIfDue(
+              clock(), ctx.startTime, lastProgressUpdate,
+              extractedCount, totalEntries, throttleMs, progressCallback
+            )
           }
-          extractedCount++
-          lastProgressUpdate = emitProgressIfDue(
-            clock(), ctx.startTime, lastProgressUpdate,
-            extractedCount, totalEntries, throttleMs, progressCallback
-          )
+        } catch (t: Throwable) {
+          rollbackPartialExtraction(extractedFiles, createdDirsList)
+          throw t
         }
 
         buildResult(extractedCount, totalEntries, ctx.startTime, ctx.sourceSize, clock)

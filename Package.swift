@@ -33,7 +33,11 @@ let package = Package(
         "HybridUnzipTask.swift",
         "HybridZipTask.swift"
       ],
-      sources: ["UnzipError.swift", "ExtractionScope.swift"]
+      sources: [
+        "UnzipError.swift",
+        "ExtractionScope.swift",
+        "PartialExtractionRollback.swift"
+      ]
     ),
     .testTarget(
       name: "NitroUnzipCoreTests",

@@ -11,9 +11,9 @@ react-native-nitro-unzip provides high-performance ZIP extraction and compressio
 | Requirement | Version |
 |---|---|
 | React Native | 0.75+ |
-| Nitro Modules | 0.34+ |
+| Nitro Modules | 0.35+ |
 | iOS | 15.5+ |
-| Android SDK | 21+ |
+| Android SDK | **26+** (bumped in 0.4.0 — `java.nio.file` requires API 26) |
 | Java (Android) | 17 |
 
 :::info New Architecture Required
@@ -39,7 +39,7 @@ The underlying `SSZipArchive` dependency requires **iOS 15.5+**. Set your deploy
 
 ### Android
 
-No additional setup needed — the library auto-links with React Native. Your app must be built with **Java 17** (the RN 0.73+ default).
+No additional setup needed — the library auto-links with React Native. Your app must be built with **Java 17** (the RN 0.73+ default) and target **`minSdkVersion 26`** or higher (bumped from 21 in 0.4.0 because the extraction path uses `java.nio.file.Path` / `Files` / `FileChannel`, which require API 26).
 
 ## Quick Start
 

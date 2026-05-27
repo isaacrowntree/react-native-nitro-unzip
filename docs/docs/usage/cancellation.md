@@ -22,6 +22,10 @@ task.cancel();
 
 Cancellation is **synchronous** — it happens immediately via JSI with no bridge round-trip. The `await()` promise will reject when a task is cancelled.
 
+**0.4.0 — mid-write cancellation actually fires.** On Android, `cancel()` triggers `Thread.interrupt()` via `runInterruptible`, which unsticks an in-flight `FileChannel` write on the next syscall (not the next chunk boundary). On iOS, `Task.checkCancellation()` runs between every entry, so a cancel between entries halts immediately. In both cases the partial state is then rolled back before the promise rejects — see [Transactional behaviour](./extraction#transactional-behaviour-040).
+
+**`cancel()` before `await()` is a no-op.** If you cancel a task you haven't `await()`'d yet, the next `await()` proceeds normally. This avoids the 0.3-era footgun where a pre-await cancel permanently poisoned the task.
+
 ## Handling Cancellation
 
 ```typescript

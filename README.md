@@ -13,11 +13,11 @@ High-performance ZIP operations for React Native, powered by [Nitro Modules](htt
 
 ## Features
 
-- **Fast** — ~500 files/sec (iOS), ~9,000+ files/sec (Android, 0.4.0+ post-NIO migration) on a 350MB / 10k file archive
+- **Fast** — ~9,000+ files/sec on Android (post-NIO / `java.util.zip.ZipFile` migration in 0.4.0) and ~10,000+ files/sec on iOS (`O_NOFOLLOW` streaming writes), measured on nested 1000-entry archives on dev hardware
 - **Zero bridge overhead** — progress callbacks via JSI, no serialization
-- **Cancellable** — synchronous cancellation via JSI
-- **Password support** — AES-256 encrypted archives (zip & unzip)
-- **Zip creation** — compress directories with optional password protection
+- **Cancellable** — mid-write cancellation on Android (`Thread.interrupt()` + interruptible NIO channels), per-entry cancellation on iOS (Swift Concurrency)
+- **AES-256 password support** — encrypted archives, zip & unzip, on both platforms
+- **Transactional extraction** — zero partial state on mid-stream failure (rollback on both platforms)
 - **Concurrent operations** — multiple tasks run independently
 - **Background execution** — iOS background task management
 
@@ -40,6 +40,10 @@ BiDi-spoofing defences to **both Android and iOS**:
 - Length cap (1024 chars), empty entries, dot/dot-dot resolutions
 - Case-insensitive + NFC-normalised duplicate detection (FAT32/HFS+/APFS-CI overwrite prevention)
 - Symlink injection at the entry target OR in any ancestor directory
+- **Transactional extraction**: any failure mid-extraction (corrupt
+  entry, disk full, write error, cancellation) rolls back every file
+  AND every intermediate directory we created before the error
+  surfaces — the destination is either fully extracted or untouched
 
 Errors carry a stable `code` (e.g. `ENTRY_OUTSIDE_DESTINATION`,
 `SYMLINK_IN_ANCESTRY`, `WRONG_PASSWORD`, `CANCELLED`) so JS handlers can

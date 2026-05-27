@@ -99,17 +99,59 @@ with iOS/Swift primitives (not a Java translation):
   `pod install` after upgrading.
 - iOS minimum stays at **15.5+**.
 
+### Transactional extraction (both platforms)
+
+- **Zero partial state on mid-stream failure.** If extraction throws
+  partway through (corrupt entry, disk full, write error, cancellation
+  between entries), every file and directory we created is rolled back
+  before the error surfaces. The previous behaviour left partials on
+  disk that could look complete to the calling app. iOS uses
+  `PartialExtractionRollback.rollback(files:, directories:)`; Android
+  uses `rollbackPartialExtraction(files, directories)`. Both delete
+  files last-written-first then directories deepest-first (depth =
+  path-component count, not string length).
+- **Intermediate directories are tracked, not just leaves.** Previously
+  `createDirectory(withIntermediateDirectories: true)` (iOS) and
+  `Files.createDirectories` (Android) created every missing parent in
+  one call, but rollback only knew about the leaf — orphaned empty
+  parents survived. 0.4.0 walks ancestry one level at a time and
+  records each created directory.
+- **Write errors propagate instead of being silently swallowed.** The
+  iOS unzip path used `try? handle.write(contentsOf:)` inside the
+  ZIPFoundation consumer closure, meaning a disk-full or `ENOSPC`
+  truncated the output file without surfacing an error — the caller
+  saw `success: true` over a partial file. Now the write throws and
+  triggers rollback.
+
+### iOS compression
+
+- **Empty placeholder directories survive a zip + unzip round trip.**
+  `HybridZipTask.collectRelativePaths` now emits both files AND
+  trailing-slash directory entries (`cache/`, `logs/today/`) so
+  placeholders the source tree depends on aren't silently dropped.
+- **`totalFiles` / `compressedFiles` on `ZipResult` count files only,**
+  matching the unzip side's `extractedFiles` semantics. Trailing-slash
+  directory entries no longer inflate the round-trip count.
+
+### iOS perf
+
+- **POSIX `open(O_NOFOLLOW)` write path** eliminates the per-file
+  `resolvingSymlinksInPath()` syscall the previous URL-based write
+  needed. Real impact on nested-folder archives (tile sets, asset
+  bundles) where every entry would otherwise re-stat its ancestors.
+
 ### Test coverage
 
-- **Android**: 64 unit tests (was 21 in 0.3.0). Coverage for symlink-at-target,
-  symlink-as-intermediate-parent, NFD/NFC normalisation collision,
-  Turkish-locale case collision, BiDi/control-char rejection, length cap,
-  content URI rejection, cached source size, UTF-8 entry names, and a
-  perf smoke (1000 entries in ~100ms on dev hardware).
-- **iOS**: 35 SPM-based XCTests covering the full security surface
-  (`UnzipError` code mappings, `ExtractionScope` Zip Slip / NUL / BiDi /
-  control / length / empty / locale / NFC-NFD dedup / symlink ancestry /
-  scheme rejection / constructor preconditions). Run via
+- **Android**: 73 unit tests (was 21 in 0.3.0). Adds: partial-extraction
+  rollback (mid-stream failure rolls back files + intermediate dirs +
+  leaves destDir intact), `rollbackPartialExtraction` direct helper
+  tests, deepest-first dir deletion ordering, empty placeholder
+  directory preservation through both the unencrypted and password
+  paths, zero-entry archive, nested perf (1000 entries in ~120ms on
+  dev hardware → ~8,300 files/sec).
+- **iOS**: 46 SPM-based XCTests covering the full security surface plus
+  `PartialExtractionRollback` direct tests (file-only, dir-only, mixed,
+  missing-target, deepest-first ordering, empty inputs). Run via
   `swift test` from the repo root — no Xcode UI needed. The Hybrid
   classes' end-to-end orchestration is intentionally tested via the
   consuming app's actual extraction rather than mocked at the SPM layer.

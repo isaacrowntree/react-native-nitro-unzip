@@ -83,11 +83,13 @@ final class HybridZipTask: HybridZipTaskSpec {
     lock.lock()
     currentTask = task
     lock.unlock()
-    beginBackgroundTask()
-    defer { endBackgroundTask() }
+    await beginBackgroundTask()
     do {
-      return try await task.value
+      let result = try await task.value
+      await endBackgroundTask()
+      return result
     } catch {
+      await endBackgroundTask()
       if Task.isCancelled || task.isCancelled {
         throw UnzipError.cancelled.asNSError
       }
@@ -98,7 +100,12 @@ final class HybridZipTask: HybridZipTaskSpec {
   private func compressUnencrypted() async throws -> ZipResult {
     let startTime = Date()
     let (sourceURL, destURL, relativePaths) = try prepare()
-    let totalFiles = relativePaths.count
+    // `totalFiles` is the file-count contract — the unzip side gates on
+    // `entry.type == .file`. Trailing-slash entries are directory
+    // placeholders, not files, so they must NOT inflate this number.
+    let totalFiles = relativePaths.reduce(into: 0) { acc, path in
+      if !path.hasSuffix("/") { acc += 1 }
+    }
 
     let archive: Archive
     do {
@@ -110,7 +117,7 @@ final class HybridZipTask: HybridZipTaskSpec {
     var compressedCount = 0
     var lastProgressUpdate = Date()
 
-    for (index, relativePath) in relativePaths.enumerated() {
+    for relativePath in relativePaths {
       try Task.checkCancellation()
       do {
         try archive.addEntry(
@@ -122,13 +129,15 @@ final class HybridZipTask: HybridZipTaskSpec {
         try? FileManager.default.removeItem(at: destURL)
         throw UnzipError.corruptArchive(underlying: error)
       }
-      compressedCount = index + 1
-      emitIfDue(
-        compressedCount: compressedCount,
-        totalFiles: totalFiles,
-        startTime: startTime,
-        lastUpdate: &lastProgressUpdate
-      )
+      if !relativePath.hasSuffix("/") {
+        compressedCount += 1
+        emitIfDue(
+          compressedCount: compressedCount,
+          totalFiles: totalFiles,
+          startTime: startTime,
+          lastUpdate: &lastProgressUpdate
+        )
+      }
     }
 
     return buildResult(
@@ -142,7 +151,11 @@ final class HybridZipTask: HybridZipTaskSpec {
   private func compressWithPassword() async throws -> ZipResult {
     let startTime = Date()
     let (sourceURL, destURL, relativePaths) = try prepare()
-    let totalFiles = relativePaths.count
+    // Match the unzip-side contract: count only file entries, not the
+    // trailing-slash directory placeholders collectRelativePaths emits.
+    let totalFiles = relativePaths.reduce(into: 0) { acc, path in
+      if !path.hasSuffix("/") { acc += 1 }
+    }
     guard let password = password else {
       throw UnzipError.cancelled  // unreachable
     }
@@ -237,10 +250,16 @@ final class HybridZipTask: HybridZipTaskSpec {
     return (sourceURL, destURL, relativePaths)
   }
 
+  /// Walk the source tree and return entries to add to the archive.
+  /// Emits BOTH regular files AND directories (as trailing-slash entries)
+  /// so empty placeholder directories — `cache/`, `logs/`, etc. — survive
+  /// a zip+unzip round trip. The 0.3-era SSZipArchive path included
+  /// these via `createZipFile(withContentsOfDirectory:)`; 0.4.0 keeps
+  /// the contract intact.
   private func collectRelativePaths(under root: URL) throws -> [String] {
     let fileManager = FileManager.default
     var results: [String] = []
-    let keys: [URLResourceKey] = [.isRegularFileKey]
+    let keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey]
     guard let enumerator = fileManager.enumerator(
       at: root,
       includingPropertiesForKeys: keys,
@@ -251,10 +270,17 @@ final class HybridZipTask: HybridZipTaskSpec {
     let rootPath = root.standardizedFileURL.path + "/"
     for case let url as URL in enumerator {
       let attrs = try url.resourceValues(forKeys: Set(keys))
-      guard attrs.isRegularFile == true else { continue }
       let absPath = url.standardizedFileURL.path
       guard absPath.hasPrefix(rootPath) else { continue }
-      results.append(String(absPath.dropFirst(rootPath.count)))
+      let relative = String(absPath.dropFirst(rootPath.count))
+      if attrs.isRegularFile == true {
+        results.append(relative)
+      } else if attrs.isDirectory == true {
+        // Directory entries get a trailing slash so the unzip side
+        // recognises them as `.directory` entries (matches the ZIP spec
+        // and what ZIPFoundation's iteration expects).
+        results.append(relative + "/")
+      }
     }
     return results
   }
@@ -320,26 +346,31 @@ final class HybridZipTask: HybridZipTaskSpec {
 
   // MARK: - Background task management
 
-  private func beginBackgroundTask() {
-    let bgId = UIApplication.shared.beginBackgroundTask(withName: "NitroZip-\(taskId)") { [weak self] in
-      self?.lock.lock()
-      let task = self?.currentTask
-      self?.lock.unlock()
-      task?.cancel()
-      self?.endBackgroundTask()
+  private func beginBackgroundTask() async {
+    let bgId = await MainActor.run {
+      UIApplication.shared.beginBackgroundTask(withName: "NitroZip-\(taskId)") { [weak self] in
+        guard let self = self else { return }
+        self.lock.lock()
+        let task = self.currentTask
+        self.lock.unlock()
+        task?.cancel()
+        Task { await self.endBackgroundTask() }
+      }
     }
     lock.lock()
     backgroundTaskId = bgId
     lock.unlock()
   }
 
-  private func endBackgroundTask() {
+  private func endBackgroundTask() async {
     lock.lock()
     let bgId = backgroundTaskId
     backgroundTaskId = .invalid
     lock.unlock()
     if bgId != .invalid {
-      UIApplication.shared.endBackgroundTask(bgId)
+      await MainActor.run {
+        UIApplication.shared.endBackgroundTask(bgId)
+      }
     }
   }
 }
