@@ -13,7 +13,7 @@ High-performance ZIP operations for React Native, powered by [Nitro Modules](htt
 
 ## Features
 
-- **Fast** — ~9,000+ files/sec on Android (post-NIO / `java.util.zip.ZipFile` migration in 0.4.0) and ~10,000+ files/sec on iOS (`O_NOFOLLOW` streaming writes), measured on nested 1000-entry archives on dev hardware
+- **Fast** — ~9,000+ files/sec on Android (post-NIO / `java.util.zip.ZipFile` migration in 0.5.0) and ~10,000+ files/sec on iOS (`O_NOFOLLOW` streaming writes), measured on nested 1000-entry archives on dev hardware
 - **Zero bridge overhead** — progress callbacks via JSI, no serialization
 - **Cancellable** — mid-write cancellation on Android (`Thread.interrupt()` + interruptible NIO channels), per-entry cancellation on iOS (Swift Concurrency)
 - **AES-256 password support** — encrypted archives, zip & unzip, on both platforms
@@ -28,11 +28,11 @@ npm install react-native-nitro-unzip react-native-nitro-modules
 cd ios && pod install
 ```
 
-> Requires React Native 0.75+, [Nitro Modules](https://nitro.margelo.com/) 0.35+, iOS 15.5+, **Android minSdk 26+** (since 0.4.0), and Java 17 (Android).
+> Requires React Native 0.75+, [Nitro Modules](https://nitro.margelo.com/) 0.35+, iOS 15.5+, **Android minSdk 26+** (since 0.5.0), and Java 17 (Android).
 
-### Security defences (0.4.0+)
+### Security defences (0.5.0+)
 
-The 0.4.0 release added the same Zip Slip / symlink / case-collision /
+The 0.5.0 release added the same Zip Slip / symlink / case-collision /
 BiDi-spoofing defences to **both Android and iOS**:
 
 - Path traversal (`../escape`), absolute paths, backslash separators

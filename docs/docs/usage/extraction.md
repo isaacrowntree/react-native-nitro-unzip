@@ -99,7 +99,7 @@ unzip.extract('/path/to/archive.zip', '/output');
 
 `content://` URIs (returned by Android's Storage Access Framework) are **not** accepted — resolve them to a filesystem path first.
 
-## Transactional behaviour (0.4.0+)
+## Transactional behaviour (0.5.0+)
 
 Extraction is **all-or-nothing**. If anything fails after the first byte is written — a corrupt archive entry, the disk filling up, a write error, or cancellation between entries — the library rolls back every file AND every intermediate directory it created before re-throwing.
 

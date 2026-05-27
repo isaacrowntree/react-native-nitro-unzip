@@ -44,10 +44,10 @@ const result = await task.await();
 | Platform | Encryption (write) | Encryption (read) |
 |---|---|---|
 | Android | **AES-256** via [zip4j](https://github.com/srikanth-lingala/zip4j) | AES-256 + traditional PKWARE (zip4j) |
-| iOS (0.4.0+) | **AES-256** via [SSZipArchive](https://github.com/ZipArchive/ZipArchive)'s `aes: true` overload | AES-256 + traditional PKWARE (SSZipArchive) |
+| iOS (0.5.0+) | **AES-256** via [SSZipArchive](https://github.com/ZipArchive/ZipArchive)'s `aes: true` overload | AES-256 + traditional PKWARE (SSZipArchive) |
 
-:::tip 0.4.0 — iOS now writes AES-256
-0.3.x used SSZipArchive's `withPassword:` overload on iOS, which writes **traditional PKWARE encryption** — broken and crackable in minutes with modern tools. 0.4.0 switches to the `aes: true` overload, matching Android's AES-256 strength. Cross-platform password archives now have equivalent crypto strength.
+:::tip 0.5.0 — iOS now writes AES-256
+0.3.x used SSZipArchive's `withPassword:` overload on iOS, which writes **traditional PKWARE encryption** — broken and crackable in minutes with modern tools. 0.5.0 switches to the `aes: true` overload, matching Android's AES-256 strength. Cross-platform password archives now have equivalent crypto strength.
 :::
 
 :::note Cross-platform compatibility

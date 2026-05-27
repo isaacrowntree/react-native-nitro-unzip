@@ -8,7 +8,7 @@ react-native-nitro-unzip is designed for speed. Here's how it performs and why.
 
 ## Benchmarks
 
-### 0.4.0 nested perf smoke (1000 entries across ~512 unique dirs)
+### 0.5.0 nested perf smoke (1000 entries across ~512 unique dirs)
 
 Measured on dev hardware. Reflects realistic workloads (tile sets, asset bundles, SDK archives) — files spread across deep directory trees with many shared parent prefixes, not a flat archive.
 
@@ -17,7 +17,7 @@ Measured on dev hardware. Reflects realistic workloads (tile sets, asset bundles
 | Android (post-NIO) | ~8,300 files/sec | ~120 ms |
 | iOS (`O_NOFOLLOW` streaming write) | ~10,000+ files/sec | ~100 ms |
 
-The Android number is a **20× improvement** over the 0.3.x `ZipInputStream`-based path (~474 files/sec). The full 0.4.0 migration ([details](#whats-new-in-040)) is what made it possible.
+The Android number is a **20× improvement** over the 0.3.x `ZipInputStream`-based path (~474 files/sec). The full 0.5.0 migration ([details](#whats-new-in-050)) is what made it possible.
 
 ## Why It's Fast
 
@@ -27,7 +27,7 @@ The Android number is a **20× improvement** over the 0.3.x `ZipInputStream`-bas
 - **POSIX `open(O_NOFOLLOW | O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC)`** for writes — eliminates the per-file `resolvingSymlinksInPath()` syscall the URL-based path would otherwise pay on every entry. Critical for nested archives where every leaf would otherwise re-stat its ancestors.
 - [**SSZipArchive**](https://github.com/ZipArchive/ZipArchive) is retained ONLY for password-protected paths (read + write), since ZIPFoundation has no AES support.
 
-### Android (0.4.0 NIO migration)
+### Android (0.5.0 NIO migration)
 
 - **`java.util.zip.ZipFile`** for random-access central-directory reads — no inflate to enumerate headers, no TOCTOU window between validate and extract passes (single FD).
 - **`java.nio.file.FileChannel.open(..., NOFOLLOW_LINKS)` + `Channels.newOutputStream(...)`** — typed exceptions (`AccessDeniedException`, `NoSuchFileException`, `FileAlreadyExistsException`), interruptible writes, and proper symlink refusal.
@@ -41,9 +41,9 @@ The Android number is a **20× improvement** over the 0.3.x `ZipInputStream`-bas
 - **Background execution** — extraction runs on native background threads / Swift `Task`s, keeping the UI responsive. iOS also registers a `UIApplication.beginBackgroundTask` so the OS doesn't suspend the app mid-archive.
 - **Transactional**: a mid-stream failure rolls every created file and intermediate directory back, so the destination is never left in a partial-but-looks-complete state.
 
-## What's new in 0.4.0
+## What's new in 0.5.0
 
-| Subsystem | 0.3.x | 0.4.0 |
+| Subsystem | 0.3.x | 0.5.0 |
 |---|---|---|
 | Android engine | `ZipInputStream` (streaming-decode) | `java.util.zip.ZipFile` (random-access central directory) |
 | Android writes | `File` + `FileOutputStream` | `java.nio.file.FileChannel` + `Channels.newOutputStream` (NIO) |

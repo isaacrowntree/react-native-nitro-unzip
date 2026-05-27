@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 — Cross-platform security hardening (Android NIO/ZipFile + iOS ZIPFoundation)
+## 0.5.0 — Cross-platform security hardening (Android NIO/ZipFile + iOS ZIPFoundation)
 
 **Breaking changes** — please read before upgrading.
 
@@ -54,7 +54,7 @@ with iOS/Swift primitives (not a Java translation):
 - **Password ZIP crypto upgraded to AES-256 on iOS.** 0.3 used
   SSZipArchive's `withPassword:` overload which writes traditional
   PKWARE encryption — broken, crackable in minutes with modern tools.
-  0.4.0 uses SSZipArchive's `aes: true` overload to match Android's
+  0.5.0 uses SSZipArchive's `aes: true` overload to match Android's
   AES-256 strength. Cross-platform password archives now have
   equivalent crypto.
 - **Mid-extraction cancellation on the password path now reads the
@@ -114,7 +114,7 @@ with iOS/Swift primitives (not a Java translation):
   `createDirectory(withIntermediateDirectories: true)` (iOS) and
   `Files.createDirectories` (Android) created every missing parent in
   one call, but rollback only knew about the leaf — orphaned empty
-  parents survived. 0.4.0 walks ancestry one level at a time and
+  parents survived. 0.5.0 walks ancestry one level at a time and
   records each created directory.
 - **Write errors propagate instead of being silently swallowed.** The
   iOS unzip path used `try? handle.write(contentsOf:)` inside the
