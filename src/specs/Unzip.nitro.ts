@@ -183,7 +183,9 @@ export interface Unzip
 
   /**
    * Create a password-protected ZIP archive from a directory.
-   * Uses AES-256 encryption on Android, standard zip encryption on iOS.
+   * Uses AES-256 encryption on both Android (via zip4j) and iOS (via
+   * SSZipArchive's AES variant). 0.3 used weak PKWARE-traditional
+   * encryption on iOS; 0.4.0 brings cross-platform AES-256 parity.
    *
    * @param sourcePath - Absolute path to the directory to compress
    * @param destinationZipPath - Absolute path for the output ZIP file

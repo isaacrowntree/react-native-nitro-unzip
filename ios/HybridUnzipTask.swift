@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import NitroModules
 import SSZipArchive
@@ -157,12 +158,14 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
           try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
           try verifyInsideDest(parent, scope: scope)
         }
-        do {
-          _ = try archive.extract(entry, to: target, skipCRC32: false)
-        } catch let error as Archive.ArchiveError {
-          throw UnzipError.corruptArchive(underlying: error)
-        }
-        try verifyInsideDest(target, scope: scope)
+        // Stream-write via POSIX open(O_NOFOLLOW) so the kernel refuses
+        // to follow a symlink that raced into the target path between
+        // ancestry validation and this write. This replaces a per-file
+        // resolvingSymlinksInPath() syscall (which would otherwise run
+        // 10k+ times on nested archives) with a single open() that
+        // either succeeds or fails fast — much faster on deeply nested
+        // workloads (tile sets, asset bundles).
+        try writeEntryNoFollow(entry: entry, target: target, archive: archive)
         extractedCount += 1
         emitIfDue(
           extractedCount: extractedCount,
@@ -218,11 +221,17 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     }
 
     // SSZipArchive's unzipFile is synchronous. Bridge to async via a
-    // continuation. Mid-extraction cancel is best-effort — the closure
-    // checks Task.isCancelled but SSZipArchive can't be aborted.
+    // continuation. Mid-extraction cancel is best-effort — SSZipArchive
+    // can't be aborted, but we observe cancellation via the captured
+    // Task reference (NOT `Task.isCancelled`, which would always return
+    // false inside a `DispatchQueue.global` closure that runs outside
+    // any Task context).
     var extractedCount = 0
     var lastProgressUpdate = Date()
     let throttle = progressThrottle
+    lock.lock()
+    let outerTask = currentTask
+    lock.unlock()
 
     let success: Bool = try await withCheckedThrowingContinuation { continuation in
       DispatchQueue.global(qos: .userInitiated).async {
@@ -235,7 +244,11 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
           error: &error,
           delegate: nil,
           progressHandler: { _, _, entryNumber, total in
-            if Task.isCancelled { return }
+            // Read cancellation from the captured Task — Task.isCancelled
+            // is task-local and returns false on a DispatchQueue worker
+            // thread. The Task instance's `isCancelled` works from any
+            // thread.
+            if outerTask?.isCancelled == true { return }
             let count = Int(entryNumber)
             extractedCount = count
             let now = Date()
@@ -286,6 +299,52 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
   }
 
   // MARK: - Helpers
+
+  /// Stream-write an entry to `target` using POSIX `open(O_NOFOLLOW)` so
+  /// the kernel refuses a symlink at the target. Decompression is driven
+  /// by ZIPFoundation's consumer-style extract; bytes flow chunk-by-chunk
+  /// into the FD without an intermediate URL-based write call.
+  private func writeEntryNoFollow(
+    entry: Entry,
+    target: URL,
+    archive: Archive
+  ) throws {
+    let fd = target.path.withCString { path -> Int32 in
+      // O_CLOEXEC — don't leak the FD across exec().
+      // O_NOFOLLOW — refuse to open if final component is a symlink (ELOOP).
+      // 0o644 — same default mode FileManager / FileHandle use.
+      return Darwin.open(path, O_CREAT | O_WRONLY | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0o644)
+    }
+    if fd < 0 {
+      let err = errno
+      if err == ELOOP {
+        throw UnzipError.symlinkInAncestry(target)
+      }
+      throw UnzipError.corruptArchive(underlying: NSError(
+        domain: NSPOSIXErrorDomain,
+        code: Int(err),
+        userInfo: [NSLocalizedDescriptionKey: String(cString: strerror(err))]
+      ))
+    }
+    let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: false)
+    defer {
+      try? handle.close()
+    }
+    do {
+      _ = try archive.extract(entry, bufferSize: 65536, skipCRC32: false) { data in
+        // FileHandle.write throws on failure on iOS 13.4+; we're at 15.5+.
+        try? handle.write(contentsOf: data)
+      }
+    } catch let error as Archive.ArchiveError {
+      // Clean up partial write on failure so a half-decompressed file
+      // doesn't get mistaken for a complete extraction.
+      try? FileManager.default.removeItem(at: target)
+      throw UnzipError.corruptArchive(underlying: error)
+    } catch {
+      try? FileManager.default.removeItem(at: target)
+      throw UnzipError.corruptArchive(underlying: error)
+    }
+  }
 
   private func prepare() throws -> (ExtractionScope, URL, UInt64) {
     try ExtractionScope.requireFilesystemPath(destinationPath, paramName: "destinationPath")

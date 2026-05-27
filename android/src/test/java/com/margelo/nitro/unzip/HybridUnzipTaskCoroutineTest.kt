@@ -845,6 +845,37 @@ class HybridUnzipTaskCoroutineTest {
     val elapsedMs = (System.nanoTime() - start) / 1_000_000
 
     assertEquals(1000.0, result.extractedFiles)
-    println("extractCore: 1000 entries in ${elapsedMs}ms (~${1000 * 1000 / elapsedMs} files/s)")
+    println("extractCore (flat): 1000 entries in ${elapsedMs}ms (~${1000 * 1000 / elapsedMs} files/s)")
+  }
+
+  @Test
+  fun `extractCore extracts a 1000-entry nested archive in under 10 seconds`() = runTest {
+    // Realistic workload: tile sets, asset bundles, SDK archives — files
+    // spread across deep directory trees with many shared parent prefixes.
+    // This is the harder test for the directory-creation and ancestry-
+    // walk paths: createdDirs dedup keeps it from re-creating shared
+    // parents, verifiedAncestors cache keeps the symlink walk amortised.
+    val zip = ZipFixtures.writeNestedZip(newZipFile("perf-nested.zip"), count = 1000, bytesPerEntry = 256)
+    val dest = newDestDir()
+
+    val start = System.nanoTime()
+    val result = withContext(Dispatchers.Default) {
+      withTimeout(10_000) {
+        HybridUnzipTask.extractCore(
+          zipPath = zip.absolutePath,
+          destinationPath = dest.absolutePath
+        )
+      }
+    }
+    val elapsedMs = (System.nanoTime() - start) / 1_000_000
+
+    assertEquals(1000.0, result.extractedFiles)
+    // Spot-check a leaf actually landed where we expect — proves the
+    // nested structure was preserved on-disk, not flattened.
+    assertTrue(
+      File(dest, "tier_0/sub_0/leaf_0/file_0000.bin").isFile,
+      "expected nested structure to be preserved"
+    )
+    println("extractCore (nested): 1000 entries in ${elapsedMs}ms (~${1000 * 1000 / elapsedMs} files/s)")
   }
 }

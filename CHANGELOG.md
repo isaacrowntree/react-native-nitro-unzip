@@ -51,6 +51,19 @@ with iOS/Swift primitives (not a Java translation):
   security properties hold identically — only the underlying decrypt
   engine differs, and password-path mid-extraction cancel is
   best-effort (SSZipArchive can't be aborted once started).
+- **Password ZIP crypto upgraded to AES-256 on iOS.** 0.3 used
+  SSZipArchive's `withPassword:` overload which writes traditional
+  PKWARE encryption — broken, crackable in minutes with modern tools.
+  0.4.0 uses SSZipArchive's `aes: true` overload to match Android's
+  AES-256 strength. Cross-platform password archives now have
+  equivalent crypto.
+- **Mid-extraction cancellation on the password path now reads the
+  captured Task** rather than `Task.isCancelled`. The DispatchQueue
+  worker thread that runs SSZipArchive's progress callback is outside
+  any Task context, so `Task.isCancelled` would always return `false`
+  (the 0.3 cancel claim was vacuous here). The Task instance's
+  `isCancelled` is callable from any thread and correctly observes
+  cancellation.
 - **Modern Swift Concurrency**: `async`/`await` + `Task` + `Task.checkCancellation()`
   replace `NSLock` + `shouldCancel` + `DispatchQueue.global`. The cancel
   signal flows through structured concurrency — no separate state machine.

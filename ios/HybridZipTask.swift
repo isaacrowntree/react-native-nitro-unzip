@@ -149,16 +149,28 @@ final class HybridZipTask: HybridZipTaskSpec {
 
     var lastProgressUpdate = Date()
     let throttle = progressThrottle
+    lock.lock()
+    let outerTask = currentTask
+    lock.unlock()
 
     let success: Bool = try await withCheckedThrowingContinuation { continuation in
       DispatchQueue.global(qos: .userInitiated).async {
+        // Use SSZipArchive's AES-256 variant. The other overload
+        // (`withPassword:`) writes traditional PKWARE encryption — broken,
+        // crackable in minutes. AES: true matches the Android zip4j path
+        // (AES-256) so cross-platform password archives have equivalent
+        // crypto strength.
         let result = SSZipArchive.createZipFile(
           atPath: destURL.path,
           withContentsOfDirectory: sourceURL.path,
           keepParentDirectory: false,
-          withPassword: password,
-          andProgressHandler: { entryNumber, total in
-            if Task.isCancelled { return }
+          compressionLevel: -1,  // Z_DEFAULT_COMPRESSION
+          password: password,
+          aes: true,
+          progressHandler: { entryNumber, total in
+            // Same captured-Task pattern as the unzip side: Task.isCancelled
+            // is task-local and returns false on the DispatchQueue worker.
+            if outerTask?.isCancelled == true { return }
             let count = Int(entryNumber)
             let totalInt = Int(total)
             let now = Date()

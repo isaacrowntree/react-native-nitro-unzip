@@ -52,6 +52,30 @@ internal object ZipFixtures {
   }
 
   /**
+   * Generate a ZIP with [count] files spread across a deeply-nested
+   * directory structure — the realistic workload for things like tile
+   * sets, asset bundles, and downloaded SDK archives. Each file's path
+   * is derived from its index in base-8 so the tree has both depth and
+   * branching.
+   *
+   * For `count = 1000`, you get ~512 unique directories across 3 levels
+   * of nesting with ~2 files per leaf — enough to exercise the
+   * directory dedup set, the ancestry-symlink-check cache, and the
+   * mkdir-batching paths in production.
+   */
+  fun writeNestedZip(file: File, count: Int, bytesPerEntry: Int = 64): File {
+    val content = ByteArray(bytesPerEntry) { (it % 256).toByte() }
+    val entries = (0 until count).map { i ->
+      val d0 = (i / 64) % 8
+      val d1 = (i / 8) % 8
+      val d2 = i % 8
+      "tier_$d0/sub_$d1/leaf_$d2/file_${i.toString().padStart(4, '0')}.bin" to content
+    }
+    writeZip(file, entries)
+    return file
+  }
+
+  /**
    * Write a password-protected ZIP (AES-256) via zip4j. The fixture matches
    * what zip4j's decrypt path expects in production.
    */
