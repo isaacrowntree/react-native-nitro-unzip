@@ -106,6 +106,18 @@ android {
 
   testOptions {
     unitTests.returnDefaultValues = true
+    // Surface println() output + skipped tests in console / CI logs. Without
+    // this, Assume.assumeNoException quietly turns a test into a no-op with
+    // no signal in build output — symlink tests on non-symlink filesystems
+    // would silently pass and an undetected regression could ship.
+    unitTests.all {
+      testLogging {
+        events 'skipped', 'failed'
+        showStandardStreams true
+        showCauses true
+        showStackTraces true
+      }
+    }
   }
 }
 
@@ -126,4 +138,7 @@ dependencies {
   // like Zip Slip path validation).
   testImplementation "junit:junit:4.13.2"
   testImplementation "org.jetbrains.kotlin:kotlin-test-junit:1.9.25"
+  // Coroutine test dispatcher + runTest for exercising the suspend extract
+  // helpers without standing up the Nitro module.
+  testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3"
 }

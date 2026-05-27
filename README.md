@@ -13,7 +13,7 @@ High-performance ZIP operations for React Native, powered by [Nitro Modules](htt
 
 ## Features
 
-- **Fast** — ~500 files/sec (iOS), ~474 files/sec (Android) on a 350MB / 10k file archive
+- **Fast** — ~500 files/sec (iOS), ~9,000+ files/sec (Android, 0.4.0+ post-NIO migration) on a 350MB / 10k file archive
 - **Zero bridge overhead** — progress callbacks via JSI, no serialization
 - **Cancellable** — synchronous cancellation via JSI
 - **Password support** — AES-256 encrypted archives (zip & unzip)
@@ -28,7 +28,11 @@ npm install react-native-nitro-unzip react-native-nitro-modules
 cd ios && pod install
 ```
 
-> Requires React Native 0.75+, [Nitro Modules](https://nitro.margelo.com/) 0.34+, iOS 15.5+, and Java 17 (Android).
+> Requires React Native 0.75+, [Nitro Modules](https://nitro.margelo.com/) 0.35+, iOS 15.5+, **Android minSdk 26+** (since 0.4.0), and Java 17 (Android).
+
+### Platform parity note (0.4.0)
+
+The 0.4.0 release added significant Zip Slip / symlink / case-collision / BiDi-spoofing defences **on Android only**. The same archive that's rejected with `SecurityException` on Android may extract on iOS (which still defers to SSZipArchive's bundled validation). iOS parity is the next planned release. If you're handling untrusted archives, treat the Android-side rejection as the source of truth.
 
 ### iOS deployment target
 

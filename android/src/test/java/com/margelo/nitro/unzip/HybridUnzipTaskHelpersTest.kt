@@ -1,16 +1,13 @@
 package com.margelo.nitro.unzip
 
-import com.margelo.nitro.unzip.HybridUnzipTask.Companion.EntryDescriptor
 import org.junit.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Pure-function tests for the helpers that drive HybridUnzipTask's
- * extraction loop. These exercise the wrapper-owned logic (throttling,
- * directory pre-collection) without instantiating the Nitro module —
- * everything tested here is our code, not the underlying JDK / zip4j.
+ * Pure-function tests for the throttle decision that drives HybridUnzipTask's
+ * extraction loop. Directory pre-collection is now inlined in the production
+ * path and covered end-to-end via [HybridUnzipTaskCoroutineTest].
  */
 class HybridUnzipTaskHelpersTest {
 
@@ -114,84 +111,4 @@ class HybridUnzipTaskHelpersTest {
     )
   }
 
-  // ─── collectDirectoriesToCreate ─────────────────────────────────────────
-
-  @Test
-  fun `returns empty list for an archive with only root files`() {
-    val dirs = HybridUnzipTask.collectDirectoriesToCreate(
-      listOf(
-        EntryDescriptor("a.png", false),
-        EntryDescriptor("b.png", false)
-      )
-    )
-    assertEquals(emptyList(), dirs)
-  }
-
-  @Test
-  fun `extracts parent directories from nested file entries`() {
-    val dirs = HybridUnzipTask.collectDirectoriesToCreate(
-      listOf(
-        EntryDescriptor("tiles/12/x/y.png", false),
-        EntryDescriptor("tiles/12/x/z.png", false)
-      )
-    )
-    // Only the immediate parent of each file is collected — File.parent
-    // returns the closest enclosing directory, not the full ancestor chain.
-    // mkdirs() in the production path handles intermediate creation.
-    assertEquals(listOf("tiles/12/x"), dirs)
-  }
-
-  @Test
-  fun `includes explicit directory entries as-is`() {
-    val dirs = HybridUnzipTask.collectDirectoriesToCreate(
-      listOf(
-        EntryDescriptor("tiles/", true),
-        EntryDescriptor("tiles/foo.png", false)
-      )
-    )
-    // Both "tiles/" (explicit) and "tiles" (from foo.png's parent) end up
-    // in the set — deduplicated by the underlying hashSet.
-    assertTrue(dirs.contains("tiles/") || dirs.contains("tiles"))
-  }
-
-  @Test
-  fun `sorts directories so parents come before children`() {
-    val dirs = HybridUnzipTask.collectDirectoriesToCreate(
-      listOf(
-        EntryDescriptor("a/b/c/d.png", false),
-        EntryDescriptor("a/x.png", false),
-        EntryDescriptor("a/b/y.png", false)
-      )
-    )
-    // Lexicographic sort gives parent-before-child for typical paths,
-    // ensuring mkdirs() never tries to create a child whose parent doesn't
-    // exist (it would anyway via mkdirs() recursion, but the sort makes
-    // the algorithm predictable).
-    val a = dirs.indexOf("a")
-    val ab = dirs.indexOf("a/b")
-    val abc = dirs.indexOf("a/b/c")
-    // Only entries that appear get checked; any -1 simply means that level
-    // wasn't a parent of any file (File.parent returns the immediate parent
-    // only, so deep nests collect only the deepest level here).
-    if (a >= 0 && ab >= 0) assertTrue(a < ab)
-    if (ab >= 0 && abc >= 0) assertTrue(ab < abc)
-  }
-
-  @Test
-  fun `deduplicates repeated directories`() {
-    val dirs = HybridUnzipTask.collectDirectoriesToCreate(
-      listOf(
-        EntryDescriptor("tiles/a.png", false),
-        EntryDescriptor("tiles/b.png", false),
-        EntryDescriptor("tiles/c.png", false)
-      )
-    )
-    assertEquals(listOf("tiles"), dirs)
-  }
-
-  @Test
-  fun `handles an empty entry list`() {
-    val dirs = HybridUnzipTask.collectDirectoriesToCreate(emptyList())
-    assertEquals(emptyList(), dirs)
-  }
 }
