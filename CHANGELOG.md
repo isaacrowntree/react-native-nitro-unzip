@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 — Xcode 26.4 static-framework build fix (regenerate with nitrogen 0.35.9)
+
+### Bug fixes
+
+- **iOS**: regenerated nitrogen autolinking now sets `SWIFT_INSTALL_OBJC_HEADER = NO` on the podspec. Fixes a build failure on Xcode 26.4+ with `use_frameworks!: :static` where the auto-generated Swift→ObjC header breaks the module chain. The symptom was a cascading `could not build module 'jsi'` (with the root cause `'folly/dynamic.h' file not found`) at compile time in consumer apps that combine static-linked frameworks with React Native built from source.
+- **Android**: data classes (`UnzipResult`, `UnzipProgress`, `ZipResult`, `ZipProgress`) now generate `equals` and `hashCode` — courtesy of newer nitrogen.
+
+### Compatibility
+
+- `peerDependencies.react-native-nitro-modules` bumped to `^0.35.9`. Older nitro-modules versions are not compatible with the new generated code.
+
 ## 0.5.1 — Test sources excluded from published package
 
 ### Bug fixes
