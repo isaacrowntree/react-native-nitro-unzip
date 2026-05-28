@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1 — Test sources excluded from published package
+
+### Bug fixes
+
+- **iOS**: `ios/Tests/**/*` no longer compile into consumers' Pods targets. The podspec's `source_files = 'ios/**/*.{h,m,mm,swift,...}'` glob was pulling test files (`ExtractionScopeTests.swift`, `UnzipErrorTests.swift`, `PartialExtractionRollbackTests.swift`, `NestedExtractionPerfTests.swift`) into the consumer's build. Now excluded via `exclude_files`.
+- **npm tarball hygiene**: `ios/Tests/` and `android/src/test/` were shipping in the published package (~95 KB across platforms). Now excluded via `files` field. Android source sets already kept `src/test` separate at compile time — this is purely tarball hygiene on that side.
+
+No behavioural changes to extraction or zip logic.
+
 ## 0.5.0 — Cross-platform security hardening (Android NIO/ZipFile + iOS ZIPFoundation)
 
 **Breaking changes** — please read before upgrading.
