@@ -226,13 +226,16 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
       throw UnzipError.cancelled  // unreachable: caller checked
     }
 
-    guard let entryNames = SSZipArchive.filesInArchive(atPath: sourceURL.path) as? [String] else {
-      throw UnzipError.corruptArchive(underlying: NSError(
-        domain: "NitroUnzip",
-        code: 5,
-        userInfo: [NSLocalizedDescriptionKey: "Could not enumerate ZIP entries"]
-      ))
+    // SSZipArchive 2.6.0 removed `+filesInArchive:`. Use ZIPFoundation
+    // to enumerate entries (it CAN read AES headers, it just can't
+    // decrypt the data — decrypt is what SSZipArchive does below).
+    let enumerateArchive: Archive
+    do {
+      enumerateArchive = try Archive(url: sourceURL, accessMode: .read)
+    } catch {
+      throw UnzipError.corruptArchive(underlying: error)
     }
+    let entryNames = enumerateArchive.map { $0.path }
     var seenDedupKeys = Set<String>()
     var totalFiles = 0
     for name in entryNames {
@@ -263,10 +266,17 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     let success: Bool = try await withCheckedThrowingContinuation { continuation in
       DispatchQueue.global(qos: .userInitiated).async {
         var error: NSError?
+        // SSZipArchive 2.6.0 dropped the (preserve+overwrite+password
+        // +error+delegate+progressHandler) variant. The closest stable
+        // signature now requires `preserveAttributes` and
+        // `nestedZipLevel` — flat extraction (nestedZipLevel: 0)
+        // matches the unencrypted ZIPFoundation path's behaviour.
         let result = SSZipArchive.unzipFile(
           atPath: sourceURL.path,
           toDestination: scope.destDir.path,
+          preserveAttributes: true,
           overwrite: true,
+          nestedZipLevel: 0,
           password: password,
           error: &error,
           delegate: nil,

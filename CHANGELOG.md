@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.3 — SSZipArchive 2.6.0 API compatibility
+
+### Bug fixes
+
+- **iOS**: `extractWithPassword` no longer fails to compile against SSZipArchive 2.6.0. The previous code called two APIs that the 2.6 release dropped/changed:
+  - `SSZipArchive.filesInArchive(atPath:)` — removed entirely. Replaced with ZIPFoundation's `Archive.map { $0.path }`, which can enumerate AES-encrypted archives (it reads the central directory; only the per-entry data is encrypted).
+  - `SSZipArchive.unzipFile(atPath:toDestination:overwrite:password:error:delegate:progressHandler:completionHandler:)` — replaced in 2.6 with a variant requiring `preserveAttributes:` and `nestedZipLevel:`. Now calling the new signature with `preserveAttributes: true, nestedZipLevel: 0` (flat, matching the unencrypted path's behaviour).
+
+The password-protected extract path was never reached by the existing Jest test suite (which only exercises JS, not the iOS Swift), so this compile break shipped silently in 0.5.0–0.5.2.
+
 ## 0.5.2 — Xcode 26.4 static-framework build fix (regenerate with nitrogen 0.35.9)
 
 ### Bug fixes
