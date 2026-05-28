@@ -9,6 +9,7 @@ package com.margelo.nitro.unzip
 
 import androidx.annotation.Keep
 import com.facebook.proguard.annotations.DoNotStrip
+import java.util.Objects
 
 
 /**
@@ -31,6 +32,24 @@ data class ZipProgress(
   val speed: Double
 ) {
   /* primary constructor */
+
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is ZipProgress) return false
+    return Objects.deepEquals(this.compressedFiles, other.compressedFiles)
+      && Objects.deepEquals(this.totalFiles, other.totalFiles)
+      && Objects.deepEquals(this.progress, other.progress)
+      && Objects.deepEquals(this.speed, other.speed)
+  }
+
+  override fun hashCode(): Int {
+    return arrayOf<Any?>(
+      compressedFiles,
+      totalFiles,
+      progress,
+      speed
+    ).contentDeepHashCode()
+  }
 
   companion object {
     /**

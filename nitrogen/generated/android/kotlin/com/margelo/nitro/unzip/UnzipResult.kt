@@ -9,6 +9,7 @@ package com.margelo.nitro.unzip
 
 import androidx.annotation.Keep
 import com.facebook.proguard.annotations.DoNotStrip
+import java.util.Objects
 
 
 /**
@@ -37,6 +38,28 @@ data class UnzipResult(
   val totalBytes: Double
 ) {
   /* primary constructor */
+
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is UnzipResult) return false
+    return Objects.deepEquals(this.success, other.success)
+      && Objects.deepEquals(this.extractedFiles, other.extractedFiles)
+      && Objects.deepEquals(this.totalFiles, other.totalFiles)
+      && Objects.deepEquals(this.duration, other.duration)
+      && Objects.deepEquals(this.averageSpeed, other.averageSpeed)
+      && Objects.deepEquals(this.totalBytes, other.totalBytes)
+  }
+
+  override fun hashCode(): Int {
+    return arrayOf<Any?>(
+      success,
+      extractedFiles,
+      totalFiles,
+      duration,
+      averageSpeed,
+      totalBytes
+    ).contentDeepHashCode()
+  }
 
   companion object {
     /**
