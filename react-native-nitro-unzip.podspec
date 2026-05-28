@@ -15,6 +15,7 @@ Pod::Spec.new do |s|
   s.module_name  = 'NitroUnzip'
 
   s.source_files = 'ios/**/*.{h,m,mm,swift,hpp,cpp}'
+  s.exclude_files = 'ios/Tests/**/*'
 
   # ZIPFoundation — pure-Swift ZIP library with an iterable Archive type.
   # Used for everything EXCEPT password-protected ZIP CREATION (write).

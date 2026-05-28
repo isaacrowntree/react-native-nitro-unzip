@@ -27,9 +27,11 @@
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__",
+    "!ios/Tests",
     "!ios/build",
     "!android/build",
-    "!android/.cxx"
+    "!android/.cxx",
+    "!android/src/test"
   ],
   "scripts": {
     "nitrogen": "nitrogen",
