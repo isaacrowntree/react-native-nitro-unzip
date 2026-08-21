@@ -1,8 +1,10 @@
-import type {
-  UnzipProgress,
-  UnzipResult,
-  ZipProgress,
-  ZipResult,
+import { NitroModules } from 'react-native-nitro-modules';
+import {
+  getUnzip,
+  type UnzipProgress,
+  type UnzipResult,
+  type ZipProgress,
+  type ZipResult,
 } from '../index';
 
 // Mock the NitroModules dependency
@@ -19,9 +21,6 @@ jest.mock('react-native-nitro-modules', () => ({
   },
 }));
 
-// Import after mock is set up
-const { getUnzip } = require('../index');
-
 describe('react-native-nitro-unzip', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -35,7 +34,6 @@ describe('react-native-nitro-unzip', () => {
     });
 
     it('creates a HybridObject with the correct name', () => {
-      const { NitroModules } = require('react-native-nitro-modules');
       getUnzip();
       expect(NitroModules.createHybridObject).toHaveBeenCalledWith('Unzip');
     });

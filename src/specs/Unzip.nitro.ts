@@ -1,4 +1,4 @@
-import type { HybridObject } from "react-native-nitro-modules";
+import type { HybridObject } from 'react-native-nitro-modules';
 
 // ─── Extraction types ────────────────────────────────────────────────
 
@@ -43,8 +43,10 @@ export interface UnzipResult {
  * This is a proper HybridObject — a native instance you interact with
  * directly, not an opaque task ID.
  */
-export interface UnzipTask
-  extends HybridObject<{ ios: "swift"; android: "kotlin" }> {
+export interface UnzipTask extends HybridObject<{
+  ios: 'swift';
+  android: 'kotlin';
+}> {
   /** Unique identifier for this extraction task */
   readonly taskId: string;
 
@@ -103,8 +105,10 @@ export interface ZipResult {
  * A single zip creation operation. Each call to `Unzip.zip()` returns
  * a `ZipTask` instance that can be observed and cancelled independently.
  */
-export interface ZipTask
-  extends HybridObject<{ ios: "swift"; android: "kotlin" }> {
+export interface ZipTask extends HybridObject<{
+  ios: 'swift';
+  android: 'kotlin';
+}> {
   /** Unique identifier for this zip task */
   readonly taskId: string;
 
@@ -149,8 +153,10 @@ export interface ZipTask
  * const zipResult = await zipTask.await()
  * ```
  */
-export interface Unzip
-  extends HybridObject<{ ios: "swift"; android: "kotlin" }> {
+export interface Unzip extends HybridObject<{
+  ios: 'swift';
+  android: 'kotlin';
+}> {
   /**
    * Start extracting a ZIP archive to the given destination directory.
    * Returns an `UnzipTask` instance for progress tracking and cancellation.

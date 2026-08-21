@@ -1,5 +1,5 @@
-import { NitroModules } from "react-native-nitro-modules";
-import type { Unzip } from "./specs/Unzip.nitro";
+import { NitroModules } from 'react-native-nitro-modules';
+import type { Unzip } from './specs/Unzip.nitro';
 
 export type {
   UnzipProgress,
@@ -9,7 +9,7 @@ export type {
   ZipResult,
   ZipTask,
   Unzip,
-} from "./specs/Unzip.nitro";
+} from './specs/Unzip.nitro';
 
 /**
  * Create an `Unzip` instance. Each instance is a factory for
@@ -32,5 +32,5 @@ export type {
  * ```
  */
 export function getUnzip(): Unzip {
-  return NitroModules.createHybridObject<Unzip>("Unzip");
+  return NitroModules.createHybridObject<Unzip>('Unzip');
 }
