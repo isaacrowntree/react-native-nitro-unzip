@@ -13,7 +13,12 @@ import ZIPFoundation
 ///   library that supports AES-encrypted CREATE).
 /// - `async`/`await` + `Task` for concurrency. Typed `UnzipError` for
 ///   the failure surface.
-final class HybridZipTask: HybridZipTaskSpec {
+// Sendable is asserted rather than derived: every mutable stored property
+// (progressCallback, currentTask, awaitedPromise, backgroundTaskId) is read
+// and written only inside the `lock` critical sections below, so instances
+// are safe to share across the DispatchQueue workers that SSZipArchive and
+// the background-task expiration handler call back on.
+final class HybridZipTask: HybridZipTaskSpec, @unchecked Sendable {
   let taskId: String
 
   private let sourcePath: String
@@ -80,9 +85,7 @@ final class HybridZipTask: HybridZipTaskSpec {
         throw UnzipError.cancelled.asNSError
       }
     }
-    lock.lock()
-    currentTask = task
-    lock.unlock()
+    lock.withLockSync { currentTask = task }
     await beginBackgroundTask()
     do {
       let result = try await task.value
@@ -160,11 +163,8 @@ final class HybridZipTask: HybridZipTaskSpec {
       throw UnzipError.cancelled  // unreachable
     }
 
-    var lastProgressUpdate = Date()
-    let throttle = progressThrottle
-    lock.lock()
-    let outerTask = currentTask
-    lock.unlock()
+    let throttle = ProgressThrottle(interval: progressThrottle)
+    let outerTask = lock.withLockSync { currentTask }
 
     let success: Bool = try await withCheckedThrowingContinuation { continuation in
       DispatchQueue.global(qos: .userInitiated).async {
@@ -186,17 +186,15 @@ final class HybridZipTask: HybridZipTaskSpec {
             if outerTask?.isCancelled == true { return }
             let count = Int(entryNumber)
             let totalInt = Int(total)
-            let now = Date()
-            let shouldEmit = count == 1
-              || count == totalInt
-              || now.timeIntervalSince(lastProgressUpdate) >= throttle
-            if shouldEmit {
+            // First and last entry always emit; everything between is rate
+            // limited. The compare-and-record is atomic inside the throttle.
+            let force = count == 1 || count == totalInt
+            if throttle.shouldEmit(force: force) {
               self.forwardProgress(
                 compressedCount: count,
                 totalFiles: totalInt,
                 startTime: startTime
               )
-              lastProgressUpdate = now
             }
           }
         )
@@ -357,16 +355,15 @@ final class HybridZipTask: HybridZipTaskSpec {
         Task { await self.endBackgroundTask() }
       }
     }
-    lock.lock()
-    backgroundTaskId = bgId
-    lock.unlock()
+    lock.withLockSync { backgroundTaskId = bgId }
   }
 
   private func endBackgroundTask() async {
-    lock.lock()
-    let bgId = backgroundTaskId
-    backgroundTaskId = .invalid
-    lock.unlock()
+    let bgId = lock.withLockSync {
+      let id = backgroundTaskId
+      backgroundTaskId = .invalid
+      return id
+    }
     if bgId != .invalid {
       await MainActor.run {
         UIApplication.shared.endBackgroundTask(bgId)

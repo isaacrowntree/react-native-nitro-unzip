@@ -21,7 +21,12 @@ import ZIPFoundation
 ///   `NSLock` + `shouldCancel` + `DispatchQueue.global` flag machine.
 /// - Typed `UnzipError` → `NSError.userInfo[NitroUnzipErrorCodeKey]`
 ///   so JS can `switch (err.userInfo.NitroUnzipErrorCode)`.
-final class HybridUnzipTask: HybridUnzipTaskSpec {
+// Sendable is asserted rather than derived: every mutable stored property
+// (progressCallback, currentTask, awaitedPromise, backgroundTaskId) is read
+// and written only inside the `lock` critical sections below, so instances
+// are safe to share across the DispatchQueue workers that SSZipArchive and
+// the background-task expiration handler call back on.
+final class HybridUnzipTask: HybridUnzipTaskSpec, @unchecked Sendable {
   let taskId: String
 
   private let zipPath: String
@@ -90,9 +95,7 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
         throw UnzipError.cancelled.asNSError
       }
     }
-    lock.lock()
-    currentTask = task
-    lock.unlock()
+    lock.withLockSync { currentTask = task }
     await beginBackgroundTask()
     do {
       let result = try await task.value
@@ -256,12 +259,9 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     // Task reference (NOT `Task.isCancelled`, which would always return
     // false inside a `DispatchQueue.global` closure that runs outside
     // any Task context).
-    var extractedCount = 0
-    var lastProgressUpdate = Date()
-    let throttle = progressThrottle
-    lock.lock()
-    let outerTask = currentTask
-    lock.unlock()
+    let extractedCount = LockedValue(0)
+    let throttle = ProgressThrottle(interval: progressThrottle)
+    let outerTask = lock.withLockSync { currentTask }
 
     let success: Bool = try await withCheckedThrowingContinuation { continuation in
       DispatchQueue.global(qos: .userInitiated).async {
@@ -287,19 +287,17 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
             // thread.
             if outerTask?.isCancelled == true { return }
             let count = Int(entryNumber)
-            extractedCount = count
-            let now = Date()
-            let shouldEmit = count == 1
-              || count == Int(total)
-              || now.timeIntervalSince(lastProgressUpdate) >= throttle
-            if shouldEmit {
+            extractedCount.set(count)
+            // First and last entry always emit; the rest are rate limited,
+            // with the compare-and-record done atomically in the throttle.
+            let force = count == 1 || count == Int(total)
+            if throttle.shouldEmit(force: force) {
               self.forwardProgress(
                 extractedCount: count,
                 totalFiles: Int(total),
                 startTime: startTime,
                 processedBytes: 0
               )
-              lastProgressUpdate = now
             }
           },
           completionHandler: nil
@@ -328,7 +326,7 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
     }
 
     return buildResult(
-      extractedFiles: extractedCount,
+      extractedFiles: extractedCount.value,
       totalFiles: totalFiles,
       startTime: startTime,
       totalBytes: sourceSize
@@ -548,16 +546,15 @@ final class HybridUnzipTask: HybridUnzipTaskSpec {
         Task { await self.endBackgroundTask() }
       }
     }
-    lock.lock()
-    backgroundTaskId = bgId
-    lock.unlock()
+    lock.withLockSync { backgroundTaskId = bgId }
   }
 
   private func endBackgroundTask() async {
-    lock.lock()
-    let bgId = backgroundTaskId
-    backgroundTaskId = .invalid
-    lock.unlock()
+    let bgId = lock.withLockSync {
+      let id = backgroundTaskId
+      backgroundTaskId = .invalid
+      return id
+    }
     if bgId != .invalid {
       await MainActor.run {
         UIApplication.shared.endBackgroundTask(bgId)

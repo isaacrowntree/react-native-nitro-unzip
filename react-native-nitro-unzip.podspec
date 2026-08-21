@@ -11,8 +11,17 @@ Pod::Spec.new do |s|
   s.authors      = package['author']
   s.source       = { git: package['repository']['url'], tag: s.version.to_s }
   s.platforms    = { ios: '15.5' }
-  s.swift_version = '5.9'
+  # Swift 6 language mode with complete concurrency checking. Migrating to it
+  # surfaced (and fixed) two real defects: NSLock held across `await` in the
+  # async extract/compress paths, and unsynchronised progress-throttle state
+  # mutated from SSZipArchive's worker threads. Both Hybrid task classes are
+  # `@unchecked Sendable` with every mutable field guarded by their `lock`.
+  s.swift_version = '6.0'
   s.module_name  = 'NitroUnzip'
+
+  s.pod_target_xcconfig = {
+    'SWIFT_STRICT_CONCURRENCY' => 'complete',
+  }
 
   s.source_files = 'ios/**/*.{h,m,mm,swift,hpp,cpp}'
   s.exclude_files = 'ios/Tests/**/*'
@@ -30,7 +39,7 @@ Pod::Spec.new do |s|
   # `zipWithPassword` API. Read paths and unencrypted-write paths all
   # use ZIPFoundation; only `ZipEngine.compressWithPassword` reaches
   # for SSZipArchive.
-  s.dependency 'SSZipArchive', '~> 2.5'
+  s.dependency 'SSZipArchive', '~> 2.6'
 
   # Add Nitrogen generated files + NitroModules dependency
   load 'nitrogen/generated/ios/NitroUnzip+autolinking.rb'

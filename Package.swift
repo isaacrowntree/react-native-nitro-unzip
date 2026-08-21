@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.0
 //
 // SPM manifest for the iOS test suite. The library product
 // `NitroUnzipCore` re-exports the pure-Swift security surface
@@ -31,18 +31,24 @@ let package = Package(
       exclude: [
         "HybridUnzip.swift",
         "HybridUnzipTask.swift",
-        "HybridZipTask.swift"
+        "HybridZipTask.swift",
+        // Owned by the NitroUnzipCoreTests target below; listing them here
+        // silences SPM's "unhandled files" warning for the shared `ios` path.
+        "Tests"
       ],
       sources: [
         "UnzipError.swift",
         "ExtractionScope.swift",
-        "PartialExtractionRollback.swift"
-      ]
+        "PartialExtractionRollback.swift",
+        "Locking.swift"
+      ],
+      swiftSettings: [.swiftLanguageMode(.v6)]
     ),
     .testTarget(
       name: "NitroUnzipCoreTests",
       dependencies: ["NitroUnzipCore"],
-      path: "ios/Tests"
+      path: "ios/Tests",
+      swiftSettings: [.swiftLanguageMode(.v6)]
     )
   ]
 )
