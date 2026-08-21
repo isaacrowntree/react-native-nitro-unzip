@@ -286,7 +286,18 @@ final class HybridUnzipTask: HybridUnzipTaskSpec, @unchecked Sendable {
             // thread. The Task instance's `isCancelled` works from any
             // thread.
             if outerTask?.isCancelled == true { return }
-            let count = Int(entryNumber)
+            // SSZipArchive's unzip progressHandler reports a ZERO-BASED index:
+            // `currentFileNumber` starts at -1 and is incremented before the
+            // callback, so the first entry arrives as 0 and the last as
+            // total-1. Treating it as a count made `extractedFiles` report one
+            // less than reality (0 for a single-entry archive) and, because
+            // neither `count == 1` nor `count == total` ever matched,
+            // suppressed every progress callback on that path.
+            //
+            // Note the zip-side handler in HybridZipTask is NOT zero-based --
+            // SSZipArchive increments before calling there -- so it must not
+            // get the same adjustment.
+            let count = Int(entryNumber) + 1
             extractedCount.set(count)
             // First and last entry always emit; the rest are rate limited,
             // with the compare-and-record done atomically in the throttle.
