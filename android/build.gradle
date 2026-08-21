@@ -1,18 +1,4 @@
-buildscript {
-  repositories {
-    mavenCentral()
-    google()
-  }
-  dependencies {
-    classpath("com.android.tools.build:gradle:8.2.1")
-    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.25")
-  }
-}
-
-def reactNativeArchitectures() {
-  def value = rootProject.getProperties().get("reactNativeArchitectures")
-  return value ? value.split(",") : ["armeabi-v7a", "x86", "x86_64", "arm64-v8a"]
-}
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 def getExtOrDefault(name) {
   return rootProject.ext.has(name) ? rootProject.ext.get(name) : project.properties["NitroUnzip_" + name]
@@ -20,6 +6,28 @@ def getExtOrDefault(name) {
 
 def getExtOrIntegerDefault(name) {
   return rootProject.ext.has(name) ? rootProject.ext.get(name) : (project.properties["NitroUnzip_" + name]).toInteger()
+}
+
+// NOTE: in a real app this block is inert — the consuming project's buildscript
+// classpath already has AGP and KGP loaded, and Gradle applies those. It only
+// governs a standalone `./gradlew` run of this library. The lookups mirror
+// getExtOrDefault (rootProject.ext wins, then gradle.properties) and carry a
+// literal fallback so a missing property can never interpolate to `null` and
+// produce a cryptic `gradle:null` resolution failure.
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath "com.android.tools.build:gradle:${rootProject.ext.has('agpVersion') ? rootProject.ext.get('agpVersion') : (project.findProperty('NitroUnzip_agpVersion') ?: '9.3.1')}"
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${rootProject.ext.has('kotlinVersion') ? rootProject.ext.get('kotlinVersion') : (project.findProperty('NitroUnzip_kotlinVersion') ?: '2.1.21')}"
+  }
+}
+
+def reactNativeArchitectures() {
+  def value = rootProject.getProperties().get("reactNativeArchitectures")
+  return value ? value.split(",") : ["armeabi-v7a", "x86", "x86_64", "arm64-v8a"]
 }
 
 apply plugin: 'com.android.library'
@@ -31,10 +39,10 @@ apply from: '../nitrogen/generated/android/NitroUnzip+autolinking.gradle'
 apply from: './fix-prefab.gradle'
 
 android {
-  namespace "com.margelo.nitro.unzip"
+  namespace = "com.margelo.nitro.unzip"
 
-  ndkVersion getExtOrDefault("ndkVersion")
-  compileSdkVersion getExtOrIntegerDefault("compileSdkVersion")
+  ndkVersion = getExtOrDefault("ndkVersion")
+  compileSdk = getExtOrIntegerDefault("compileSdkVersion")
 
   defaultConfig {
     // 0.4.0 hard-requires API 26 because the extraction path uses
@@ -46,21 +54,20 @@ android {
     // Hardcoding here forces the AGP manifest merger to reject any
     // consumer with `minSdkVersion < 26`, surfacing the requirement at
     // build time instead of runtime.
-    minSdkVersion 26
-    targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
+    minSdk = 26
 
     externalNativeBuild {
       cmake {
-        cppFlags "-frtti -fexceptions -Wall -Wextra -fstack-protector-all"
-        arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+        cppFlags = ["-frtti", "-fexceptions", "-Wall", "-Wextra", "-fstack-protector-all"]
+        arguments = ["-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"]
         abiFilters (*reactNativeArchitectures())
 
         buildTypes {
           debug {
-            cppFlags "-O1 -g"
+            cppFlags = ["-O1", "-g"]
           }
           release {
-            cppFlags "-O2"
+            cppFlags = ["-O2"]
           }
         }
       }
@@ -68,34 +75,38 @@ android {
   }
 
   compileOptions {
-    sourceCompatibility JavaVersion.VERSION_17
-    targetCompatibility JavaVersion.VERSION_17
-  }
-  kotlinOptions {
-    jvmTarget = '17'
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
   }
 
-  packagingOptions {
-    excludes = [
-      "META-INF",
-      "META-INF/**",
-      "**/libNitroModules.so",
-      "**/libc++_shared.so",
-      "**/libfbjni.so",
-      "**/libjsi.so",
-      "**/libfolly_json.so",
-      "**/libfolly_runtime.so",
-      "**/libglog.so",
-      "**/libhermes.so",
-      "**/libreactnative.so",
-      "**/libreactnativejni.so",
-      "**/libturbomodulejsijni.so",
-      "**/libreact_nativemodule_core.so",
-    ]
+  // `packagingOptions` was deprecated in AGP 8 and removed in AGP 9.
+  packaging {
+    resources {
+      excludes += [
+        "META-INF",
+        "META-INF/**",
+      ]
+    }
+    jniLibs {
+      excludes += [
+        "**/libNitroModules.so",
+        "**/libc++_shared.so",
+        "**/libfbjni.so",
+        "**/libjsi.so",
+        "**/libfolly_json.so",
+        "**/libfolly_runtime.so",
+        "**/libglog.so",
+        "**/libhermes.so",
+        "**/libreactnative.so",
+        "**/libreactnativejni.so",
+        "**/libturbomodulejsijni.so",
+        "**/libreact_nativemodule_core.so",
+      ]
+    }
   }
 
   buildFeatures {
-    prefab true
+    prefab = true
   }
 
   sourceSets {
@@ -109,7 +120,7 @@ android {
 
   externalNativeBuild {
     cmake {
-      path "CMakeLists.txt"
+      path = "CMakeLists.txt"
     }
   }
 
@@ -130,24 +141,36 @@ android {
   }
 }
 
+// `android.kotlinOptions` was deprecated in Kotlin Gradle Plugin 2.0 and is
+// removed in 2.2 — the toolchain is configured through the `kotlin` extension.
+kotlin {
+  compilerOptions {
+    jvmTarget.set(JvmTarget.JVM_17)
+  }
+}
+
 repositories {
-  mavenCentral()
   google()
+  mavenCentral()
 }
 
 dependencies {
-  implementation "com.facebook.react:react-android:+"
+  // For > 0.71 this is replaced by `com.facebook.react:react-android:$version`
+  // by the react gradle plugin, which is why the dynamic version is correct
+  // here rather than a smell. Matches how react-native-nitro-modules declares it.
+  //noinspection GradleDynamicVersion
   implementation "com.facebook.react:react-native:+"
+
   implementation project(":react-native-nitro-modules")
-  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${getExtOrDefault('coroutinesVersion') ?: '1.11.0'}"
   // zip4j — needed for password-protected zip/unzip (java.util.zip has no password API)
-  implementation "net.lingala.zip4j:zip4j:2.11.5"
+  implementation "net.lingala.zip4j:zip4j:${getExtOrDefault('zip4jVersion') ?: '2.11.6'}"
 
   // JVM unit tests (no Android framework needed for pure-Kotlin code paths
   // like Zip Slip path validation).
   testImplementation "junit:junit:4.13.2"
-  testImplementation "org.jetbrains.kotlin:kotlin-test-junit:1.9.25"
+  testImplementation "org.jetbrains.kotlin:kotlin-test-junit:${getExtOrDefault('kotlinVersion') ?: '2.1.21'}"
   // Coroutine test dispatcher + runTest for exercising the suspend extract
   // helpers without standing up the Nitro module.
-  testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3"
+  testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:${getExtOrDefault('coroutinesVersion') ?: '1.11.0'}"
 }
