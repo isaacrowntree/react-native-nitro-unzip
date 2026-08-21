@@ -24,8 +24,8 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v5
-      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
           packages: 'platforms;android-36 build-tools;36.0.0 ndk;27.1.12297006'
@@ -60,7 +60,7 @@ jobs:
             npx wait-on http://localhost:8081/status -t 300000
             maestro test .maestro
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: maestro-debug
