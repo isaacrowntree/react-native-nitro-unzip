@@ -72,4 +72,12 @@ final class LockedValue<Value>: @unchecked Sendable {
   func set(_ newValue: Value) {
     lock.withLockSync { storage = newValue }
   }
+
+  /// Read-modify-write under a single acquisition, for callers that need the
+  /// updated value (an increment whose result decides whether to emit).
+  /// Doing this as a separate get and set would reopen the race.
+  @discardableResult
+  func mutate<T>(_ body: (inout Value) -> T) -> T {
+    lock.withLockSync { body(&storage) }
+  }
 }

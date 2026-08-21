@@ -40,7 +40,8 @@ let package = Package(
         "UnzipError.swift",
         "ExtractionScope.swift",
         "PartialExtractionRollback.swift",
-        "Locking.swift"
+        "Locking.swift",
+        "ZipCentralDirectory.swift"
       ],
       swiftSettings: [.swiftLanguageMode(.v6)]
     ),
@@ -48,6 +49,7 @@ let package = Package(
       name: "NitroUnzipCoreTests",
       dependencies: ["NitroUnzipCore"],
       path: "ios/Tests",
+      resources: [.copy("Fixtures")],
       swiftSettings: [.swiftLanguageMode(.v6)]
     )
   ]

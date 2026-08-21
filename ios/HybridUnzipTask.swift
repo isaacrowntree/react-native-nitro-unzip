@@ -229,16 +229,21 @@ final class HybridUnzipTask: HybridUnzipTaskSpec, @unchecked Sendable {
       throw UnzipError.cancelled  // unreachable: caller checked
     }
 
-    // SSZipArchive 2.6.0 removed `+filesInArchive:`. Use ZIPFoundation
-    // to enumerate entries (it CAN read AES headers, it just can't
-    // decrypt the data — decrypt is what SSZipArchive does below).
-    let enumerateArchive: Archive
+    // SSZipArchive 2.6.0 removed `+filesInArchive:`, and ZIPFoundation — used
+    // here previously — yields NOTHING for WinZip AES archives (compression
+    // method 99). That silently emptied this list, so the validation loop
+    // below iterated zero entries and every Zip Slip / duplicate-name check
+    // was skipped on exactly the password-protected path that needs them.
+    //
+    // The central directory records entry names independently of how the data
+    // is compressed or encrypted, so read it directly. See
+    // ZipCentralDirectoryTests for the AES regression coverage.
+    let entryNames: [String]
     do {
-      enumerateArchive = try Archive(url: sourceURL, accessMode: .read)
+      entryNames = try ZipCentralDirectory.entryNames(at: sourceURL)
     } catch {
       throw UnzipError.corruptArchive(underlying: error)
     }
-    let entryNames = enumerateArchive.map { $0.path }
     var seenDedupKeys = Set<String>()
     var totalFiles = 0
     for name in entryNames {
@@ -259,6 +264,10 @@ final class HybridUnzipTask: HybridUnzipTaskSpec, @unchecked Sendable {
     // Task reference (NOT `Task.isCancelled`, which would always return
     // false inside a `DispatchQueue.global` closure that runs outside
     // any Task context).
+    // Bind to a constant before the concurrent closure captures it: Swift 6
+    // rejects referencing a captured `var` from concurrently-executing code,
+    // and this value is final once the validation loop above has run.
+    let fileCount = totalFiles
     let extractedCount = LockedValue(0)
     let throttle = ProgressThrottle(interval: progressThrottle)
     let outerTask = lock.withLockSync { currentTask }
@@ -280,32 +289,35 @@ final class HybridUnzipTask: HybridUnzipTaskSpec, @unchecked Sendable {
           password: password,
           error: &error,
           delegate: nil,
-          progressHandler: { _, _, entryNumber, total in
+          progressHandler: { entryPath, _, _, _ in
             // Read cancellation from the captured Task — Task.isCancelled
             // is task-local and returns false on a DispatchQueue worker
             // thread. The Task instance's `isCancelled` works from any
             // thread.
             if outerTask?.isCancelled == true { return }
-            // SSZipArchive's unzip progressHandler reports a ZERO-BASED index:
-            // `currentFileNumber` starts at -1 and is incremented before the
-            // callback, so the first entry arrives as 0 and the last as
-            // total-1. Treating it as a count made `extractedFiles` report one
-            // less than reality (0 for a single-entry archive) and, because
-            // neither `count == 1` nor `count == total` ever matched,
-            // suppressed every progress callback on that path.
+
+            // Deliberately ignore SSZipArchive's `entryNumber` and `total`.
+            // Both count EVERY central-directory entry, including directory
+            // placeholders, whereas `totalFiles` above counts only real files
+            // — the same file-only contract the unencrypted path reports on.
+            // Mixing the two let `extractedFiles` exceed `totalFiles` for any
+            // archive containing a directory entry, and gave JS a different
+            // denominator depending on whether a password was supplied.
             //
-            // Note the zip-side handler in HybridZipTask is NOT zero-based --
-            // SSZipArchive increments before calling there -- so it must not
-            // get the same adjustment.
-            let count = Int(entryNumber) + 1
-            extractedCount.set(count)
-            // First and last entry always emit; the rest are rate limited,
+            // (`entryNumber` is also zero-based here — currentFileNumber
+            // starts at -1 and is incremented before the callback — while the
+            // zip-side handler in HybridZipTask is one-based. Counting the
+            // entries ourselves sidesteps that asymmetry entirely.)
+            guard !entryPath.hasSuffix("/") else { return }
+            let count = extractedCount.mutate { $0 += 1; return $0 }
+
+            // First and last file always emit; the rest are rate limited,
             // with the compare-and-record done atomically in the throttle.
-            let force = count == 1 || count == Int(total)
+            let force = count == 1 || count == fileCount
             if throttle.shouldEmit(force: force) {
               self.forwardProgress(
                 extractedCount: count,
-                totalFiles: Int(total),
+                totalFiles: fileCount,
                 startTime: startTime,
                 processedBytes: 0
               )
