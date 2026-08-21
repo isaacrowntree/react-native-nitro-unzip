@@ -1,0 +1,22 @@
+appId: com.isaactriptech.nitrounzipexample
+name: Extract a bundled archive
+tags:
+  - extract
+---
+- launchApp:
+    clearState: true
+- assertVisible: 'react-native-nitro-unzip'
+- tapOn: 'Extract ZIP'
+
+# The bundled test.zip holds 4 entries under a single test-data directory.
+# On Android the asset lives inside the APK and must be copied out first, so
+# this also guards the expo-asset resolution path.
+- extendedWaitUntil:
+    visible:
+      text: 'Done: 4 files.*'
+    timeout: 30000
+- assertVisible: 'Extracted contents: test-data'
+
+# Progress must actually stream, not just jump to the terminal state.
+- assertVisible:
+    text: '4/4 files.*100%.*'

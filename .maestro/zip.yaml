@@ -1,0 +1,17 @@
+appId: com.isaactriptech.nitrounzipexample
+name: Compress a directory
+tags:
+  - zip
+---
+- launchApp:
+    clearState: true
+- tapOn: 'Create ZIP'
+
+- extendedWaitUntil:
+    visible:
+      text: 'Done: 10 files.*'
+    timeout: 30000
+- assertVisible:
+    text: '10/10 files.*100%'
+- assertVisible:
+    text: 'Output zip: .*created\.zip'

@@ -1,0 +1,67 @@
+name: E2E (Maestro)
+
+# Manual only: this boots an emulator, does a full native build and runs Metro,
+# which takes ~20-30 minutes. Run it before a release or when touching the
+# native extract/compress paths.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v5
+      - uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: 'platforms;android-36 build-tools;36.0.0 ndk;27.1.12297006'
+
+      - run: npm ci
+      - run: npm ci --prefix example
+      - run: npm run prebuild:example
+
+      - name: Install Maestro
+        run: |
+          curl -Ls https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      # KVM is required for a usable x86_64 emulator on ubuntu runners.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Build, boot emulator and run flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            npm --prefix example run android -- --no-bundler &
+            npx --prefix example expo start --port 8081 &
+            npx wait-on http://localhost:8081/status -t 300000
+            maestro test .maestro
+
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: maestro-debug
+          path: ~/.maestro/tests/

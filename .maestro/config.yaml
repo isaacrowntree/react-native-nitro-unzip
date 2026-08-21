@@ -1,0 +1,11 @@
+# Maestro E2E flows for the example app.
+#
+# These exercise the real native extract/compress paths on a device or
+# emulator — the JS unit tests mock the Nitro module entirely, and the Kotlin
+# and Swift unit tests cover their halves in isolation, so this is the only
+# layer that proves the whole chain works end to end.
+#
+# Run everything:   maestro test .maestro
+# Run one flow:     maestro test .maestro/password.yaml
+flows:
+  - '*.yaml'
