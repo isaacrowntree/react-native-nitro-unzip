@@ -15,7 +15,9 @@
 
 - **iOS**: path validation was silently skipped for **password-protected archives**. `extractWithPassword` enumerated the archive with ZIPFoundation to build the entry list it then validates — but ZIPFoundation yields no entries for WinZip AES archives (compression method 99), so the validation loop iterated an empty list. The Zip Slip, symlink-ancestry, duplicate-name and unicode checks in `ExtractionScope` therefore never ran on that path, and `UnzipResult.totalFiles` was reported as `0`.
 
-  SSZipArchive performs its own path sanitisation, so this is a defence-in-depth failure rather than a demonstrated escape — no proof-of-concept traversal was achieved — but the library's own guarantee that *every entry's path is validated before any byte is written* did not hold for encrypted archives. Anyone extracting untrusted password-protected ZIPs on iOS should upgrade.
+  **This was not exploitable as a path traversal, and that has been tested rather than assumed.** A WinZip AES-256 archive containing `../escape-one.txt`, `../../escape-two.txt`, `sub/../../escape-mixed.txt` and a deep `../../../../../../tmp/...` entry was extracted through SSZipArchive 2.6.0 with the exact arguments this library uses: every entry landed *inside* the destination, with the traversal components flattened away, and nothing escaped. Earlier versions were therefore protected by SSZipArchive's own sanitisation.
+
+  What did not hold is this library's stricter contract. SSZipArchive *flattens* a hostile entry — silently writing it under a rewritten name — where `ExtractionScope` *rejects* it, so a caller can tell a malicious archive from a benign one. SSZipArchive's sanitisation also does not cover symlinked ancestors, duplicate names or unicode-normalisation collisions, all of which `ExtractionScope` checks and none of which were running on the encrypted path. Upgrading restores the documented guarantee; no advisory is issued, as no released version could be made to write outside the destination.
 
   Entry names now come from a dependency-free central-directory reader (`ZipCentralDirectory`), which records names independently of how entry data is compressed or encrypted. Unencrypted extraction was never affected, and Android (zip4j) was never affected.
 
@@ -36,7 +38,7 @@
 
 ### Test coverage
 
-- Kotlin, Swift and JS unit tests (210 total) now run on every pull request; previously the native suites ran nowhere and `npm test` only ran on tag push.
+- Kotlin, Swift and JS unit tests (214 total) now run on every pull request; previously the native suites ran nowhere and `npm test` only ran on tag push.
 - Added Maestro end-to-end flows covering extract, compress and the password round trip on real devices. The JS tests mock the Nitro module and the native suites cover each half in isolation, so these are the only layer exercising the full chain — the iOS progress bug above was invisible to every other test.
 
 ## 0.5.3 — SSZipArchive 2.6.0 API compatibility

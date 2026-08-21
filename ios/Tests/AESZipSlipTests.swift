@@ -12,6 +12,26 @@ import XCTest
 ///
 /// Fixture is a real WinZip AES-256 archive whose central directory contains
 /// four traversal entries alongside one benign file.
+///
+/// Measured behaviour of SSZipArchive 2.6.0 on this exact fixture, called with
+/// the same arguments the extract path uses (verified in isolation, outside
+/// this package): it CONTAINS the archive but does so by *flattening* the
+/// traversal components rather than refusing the entries --
+///
+///     ../escape-one.txt                        -> escape-one.txt
+///     ../../escape-two.txt                     -> escape-two.txt
+///     sub/../../escape-mixed.txt               -> escape-mixed.txt
+///     ../../../../../../tmp/escape-abs-ish.txt -> tmp/escape-abs-ish.txt
+///
+/// Nothing landed outside the destination. That is why the pre-0.6.0 gap was a
+/// defence-in-depth failure and not a traversal vulnerability -- it is measured,
+/// not assumed.
+///
+/// It also shows why this layer still matters: flattening silently WRITES a
+/// hostile entry under a rewritten name, whereas ExtractionScope rejects it, so
+/// callers can tell a malicious archive from a benign one. SSZipArchive's
+/// sanitisation also does not cover symlinked ancestors, duplicate names or
+/// unicode-normalisation collisions, which ExtractionScope does.
 final class AESZipSlipTests: XCTestCase {
   private var destination: URL!
 
@@ -41,7 +61,9 @@ final class AESZipSlipTests: XCTestCase {
     XCTAssertTrue(names.contains("sub/../../escape-mixed.txt"))
   }
 
-  /// Half two: every one of them must be refused before any byte is written.
+  /// Half two: every one of them must be REFUSED, not silently rewritten.
+  /// SSZipArchive would flatten these into the destination under mangled
+  /// names; rejecting is what lets a caller distinguish attack from accident.
   func testEveryTraversalEntryIsRejected() throws {
     let scope = try ExtractionScope(destinationPath: destination.path)
     let hostile = try maliciousEntries().filter { $0 != "benign.txt" }
