@@ -11,7 +11,7 @@ react-native-nitro-unzip provides high-performance ZIP extraction and compressio
 | Requirement | Version |
 |---|---|
 | React Native | 0.75+ |
-| Nitro Modules | 0.35+ |
+| Nitro Modules | 0.37+ |
 | iOS | 15.5+ |
 | Android SDK | **26+** (bumped in 0.5.0 — `java.nio.file` requires API 26) |
 | Java (Android) | 17 |

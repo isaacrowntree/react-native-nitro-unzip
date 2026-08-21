@@ -28,7 +28,9 @@ npm install react-native-nitro-unzip react-native-nitro-modules
 cd ios && pod install
 ```
 
-> Requires React Native 0.75+, [Nitro Modules](https://nitro.margelo.com/) 0.35+, iOS 15.5+, **Android minSdk 26+** (since 0.5.0), and Java 17 (Android).
+> Requires React Native 0.75+, [Nitro Modules](https://nitro.margelo.com/) 0.37+, iOS 15.5+, **Android minSdk 26+** (since 0.5.0), and Java 17 (Android).
+>
+> Android builds target SDK 36 and Kotlin 2.1. The library reads `rootProject.ext.compileSdkVersion` / `ndkVersion` / `kotlinVersion` before its own defaults, so a consuming app (or Expo's root project) controls the toolchain as usual.
 
 ### Security defences (0.5.0+)
 
@@ -49,9 +51,21 @@ Errors carry a stable `code` (e.g. `ENTRY_OUTSIDE_DESTINATION`,
 `SYMLINK_IN_ANCESTRY`, `WRONG_PASSWORD`, `CANCELLED`) so JS handlers can
 branch programmatically rather than parsing localised messages.
 
-### iOS deployment target
+### Platform configuration
 
-The library depends on `SSZipArchive`, which requires iOS 15.5+. Ensure your app's Podfile (or Expo `Podfile.properties.json`) sets `ios.deploymentTarget` to `15.5` or higher.
+**iOS.** The library depends on `SSZipArchive`, which requires iOS 15.5+. Ensure your app's Podfile (or Expo `Podfile.properties.json`) sets `ios.deploymentTarget` to `15.5` or higher. Expo SDK 57 already floors this at 16.4, so no action is needed there.
+
+**Android.** The library hard-requires `minSdkVersion 26` (the extraction path uses `java.nio.file`). The manifest merger rejects a lower value at build time rather than crashing on device, so set it explicitly. With Expo, use `expo-build-properties`:
+
+```json
+{
+  "expo": {
+    "plugins": [["expo-build-properties", { "android": { "minSdkVersion": 26 } }]]
+  }
+}
+```
+
+For a bare React Native app, set `minSdkVersion = 26` in `android/build.gradle`.
 
 ## Quick Example
 
