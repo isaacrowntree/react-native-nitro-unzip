@@ -11,6 +11,14 @@
 
 `minSdkVersion 26` is unchanged since 0.4.0, but it is now documented — see the README for the `expo-build-properties` snippet. Expo defaults apps to 24, which the manifest merger rejects at build time.
 
+### Security
+
+- **iOS**: path validation was silently skipped for **password-protected archives**. `extractWithPassword` enumerated the archive with ZIPFoundation to build the entry list it then validates — but ZIPFoundation yields no entries for WinZip AES archives (compression method 99), so the validation loop iterated an empty list. The Zip Slip, symlink-ancestry, duplicate-name and unicode checks in `ExtractionScope` therefore never ran on that path, and `UnzipResult.totalFiles` was reported as `0`.
+
+  SSZipArchive performs its own path sanitisation, so this is a defence-in-depth failure rather than a demonstrated escape — no proof-of-concept traversal was achieved — but the library's own guarantee that *every entry's path is validated before any byte is written* did not hold for encrypted archives. Anyone extracting untrusted password-protected ZIPs on iOS should upgrade.
+
+  Entry names now come from a dependency-free central-directory reader (`ZipCentralDirectory`), which records names independently of how entry data is compressed or encrypted. Unencrypted extraction was never affected, and Android (zip4j) was never affected.
+
 ### Bug fixes
 
 - **iOS**: `extractWithPassword` reported the wrong `extractedFiles` count and emitted no progress at all. SSZipArchive's unzip `progressHandler` reports a **zero-based** entry index — `currentFileNumber` starts at `-1` and is incremented before the callback — but the code treated it as a count. Two effects: the result was always one lower than reality (`0` for a single-entry archive, despite extraction succeeding), and because neither `count == 1` nor `count == total` ever matched, the throttle suppressed every progress callback on that path. The zip-side handler is *not* zero-based, which is why compression always reported correctly.
@@ -28,7 +36,7 @@
 
 ### Test coverage
 
-- Kotlin, Swift and JS unit tests (206 total) now run on every pull request; previously the native suites ran nowhere and `npm test` only ran on tag push.
+- Kotlin, Swift and JS unit tests (210 total) now run on every pull request; previously the native suites ran nowhere and `npm test` only ran on tag push.
 - Added Maestro end-to-end flows covering extract, compress and the password round trip on real devices. The JS tests mock the Nitro module and the native suites cover each half in isolation, so these are the only layer exercising the full chain — the iOS progress bug above was invisible to every other test.
 
 ## 0.5.3 — SSZipArchive 2.6.0 API compatibility
