@@ -107,7 +107,7 @@
     "react-native-builder-bob": "^0.43.0",
     "react-native-nitro-modules": "^0.37.0",
     "release-it": "^21.0.2",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.67.0"
   },
   "prettier": {
