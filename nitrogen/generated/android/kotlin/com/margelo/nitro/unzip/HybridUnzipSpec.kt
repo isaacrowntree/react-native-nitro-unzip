@@ -10,6 +10,7 @@ package com.margelo.nitro.unzip
 import androidx.annotation.Keep
 import com.facebook.jni.HybridData
 import com.facebook.proguard.annotations.DoNotStrip
+import dalvik.annotation.optimization.FastNative
 import com.margelo.nitro.core.HybridObject
 
 /**
@@ -54,6 +55,7 @@ abstract class HybridUnzipSpec: HybridObject() {
   @Keep
   protected open class CxxPart(javaPart: HybridUnzipSpec): HybridObject.CxxPart(javaPart) {
     // C++ JHybridUnzipSpec::CxxPart::initHybrid(...)
+    @FastNative
     external override fun initHybrid(): HybridData
   }
   override fun createCxxPart(): CxxPart {

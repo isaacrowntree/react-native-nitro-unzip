@@ -17,7 +17,7 @@ namespace margelo::nitro::unzip {
   using namespace facebook;
 
   /**
-   * The C++ JNI bridge between the C++ struct "ZipProgress" and the the Kotlin data class "ZipProgress".
+   * The C++ JNI bridge between the C++ struct "ZipProgress" and the Kotlin data class "ZipProgress".
    */
   struct JZipProgress final: public jni::JavaClass<JZipProgress> {
   public:

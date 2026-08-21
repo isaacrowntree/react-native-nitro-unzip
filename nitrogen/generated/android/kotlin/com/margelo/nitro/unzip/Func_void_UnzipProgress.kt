@@ -10,7 +10,6 @@ package com.margelo.nitro.unzip
 import androidx.annotation.Keep
 import com.facebook.jni.HybridData
 import com.facebook.proguard.annotations.DoNotStrip
-import dalvik.annotation.optimization.FastNative
 
 
 /**
@@ -59,7 +58,6 @@ class Func_void_UnzipProgress_cxx: Func_void_UnzipProgress {
   override fun invoke(progress: UnzipProgress): Unit
     = invoke_cxx(progress)
 
-  @FastNative
   private external fun invoke_cxx(progress: UnzipProgress): Unit
 }
 

@@ -1,11 +1,15 @@
 {
   "$schema": "https://nitro.margelo.com/nitro.schema.json",
-  "cxxNamespace": ["unzip"],
+  "cxxNamespace": [
+    "unzip"
+  ],
   "ios": {
     "iosModuleName": "NitroUnzip"
   },
   "android": {
-    "androidNamespace": ["unzip"],
+    "androidNamespace": [
+      "unzip"
+    ],
     "androidCxxLibName": "NitroUnzip"
   },
   "autolinking": {
@@ -20,5 +24,10 @@
       }
     }
   },
-  "ignorePaths": ["node_modules", "lib", "example"]
+  "ignorePaths": [
+    "node_modules",
+    "lib",
+    "example",
+    "docs"
+  ]
 }

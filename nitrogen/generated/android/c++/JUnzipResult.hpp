@@ -17,7 +17,7 @@ namespace margelo::nitro::unzip {
   using namespace facebook;
 
   /**
-   * The C++ JNI bridge between the C++ struct "UnzipResult" and the the Kotlin data class "UnzipResult".
+   * The C++ JNI bridge between the C++ struct "UnzipResult" and the Kotlin data class "UnzipResult".
    */
   struct JUnzipResult final: public jni::JavaClass<JUnzipResult> {
   public:
