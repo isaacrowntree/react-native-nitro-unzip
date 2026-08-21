@@ -8,8 +8,15 @@ const libraryRoot = path.resolve(projectRoot, '..');
 
 const config = getDefaultConfig(projectRoot);
 
-// Watch the library source so edits to src/ hot-reload without a rebuild.
-config.watchFolders = [path.join(libraryRoot, 'src')];
+// Watch the whole library root, not just src/. `example/node_modules/
+// react-native-nitro-unzip` is a symlink to the repo root, so Metro has to read
+// <repoRoot>/package.json to resolve the package at all — narrowing this to
+// src/ puts that file outside every watched root and the bare `metro build`
+// entrypoint fails to resolve the library. (`expo start` papers over it via
+// its own config layer, which is exactly why it should not be relied on.)
+// The blockList below, not this narrowing, is what keeps the library's
+// node_modules out of resolution.
+config.watchFolders = [libraryRoot];
 
 // Resolve every package from the app's own node_modules. The library is
 // installed via `file:..`, so Metro follows that symlink into the repo root and

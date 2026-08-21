@@ -26,9 +26,10 @@ jobs:
           cache: 'npm'
 
       - name: Install root dependencies
-        # Docs only need typedoc to read src/ — skip the example workspace
-        # (Expo + RN, hundreds of MB) and the prepare -> bob build lifecycle.
-        run: npm ci --workspaces=false --ignore-scripts
+        # --ignore-scripts skips the prepare -> bob build lifecycle; typedoc
+        # reads src/ directly and never needs lib/. (No --workspaces flag: the
+        # example is not a workspace, so root install already excludes it.)
+        run: npm ci --ignore-scripts
 
       - name: Install docs dependencies
         working-directory: docs

@@ -206,6 +206,15 @@ export default function App() {
         extra.create();
         extra.write(`Additional protected file ${i}\n`.repeat(20));
       }
+      // A nested directory on purpose. Directory placeholders are archive
+      // entries too, so an implementation that counts entries rather than
+      // files reports more extracted files than the archive has files. Without
+      // this the count assertion below passes even when that is broken.
+      const nested = new Directory(source, 'nested');
+      nested.create({ intermediates: true });
+      const buried = new File(nested, 'deep.txt');
+      buried.create();
+      buried.write('Nested protected file\n'.repeat(20));
 
       const sourceDir = source.uri;
       const pwZip = new File(Paths.cache, 'protected.zip').uri;
@@ -213,7 +222,13 @@ export default function App() {
 
       log('Creating password-protected zip...');
       const zipTask = unzip.zipWithPassword(sourceDir, pwZip, 'test123');
+      // Publish the task so Cancel targets it during the compress half. Without
+      // this, tapping Cancel here either did nothing or cancelled a stale task
+      // left behind by a previous run, since the other handlers only clear
+      // activeTask on success.
+      activeTask.current = zipTask;
       const zipResult = await zipTask.await();
+      activeTask.current = null;
       log(`Created protected zip: ${zipResult.compressedFiles} files`, 'info');
 
       // Now extract it

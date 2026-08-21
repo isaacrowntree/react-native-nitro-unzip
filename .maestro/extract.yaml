@@ -8,7 +8,8 @@ tags:
 - assertVisible: 'react-native-nitro-unzip'
 - tapOn: 'Extract ZIP'
 
-# The bundled test.zip holds 4 entries under a single test-data directory.
+# The bundled test.zip holds 6 entries — 4 files plus 2 directory entries —
+# so this also pins that the reported count is files, not raw archive entries.
 # On Android the asset lives inside the APK and must be copied out first, so
 # this also guards the expo-asset resolution path.
 - extendedWaitUntil:
