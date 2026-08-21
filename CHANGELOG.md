@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.6.0 — 2026 toolchain baseline, Swift 6 concurrency fixes
+
+### Breaking changes
+
+- **Peer dependency**: `react-native-nitro-modules` moves from `^0.35.9` to `^0.37.0`. Nitrogen output is version-coupled to the runtime, so the generated bindings and the peer must move together — installs on 0.35/0.36 will now fail peer resolution rather than break at runtime.
+- **Android toolchain**: the module builds with AGP 9.3.1 / Kotlin 2.1.21 and compiles against SDK 36 (matching what `react-native-nitro-modules` 0.37 itself pins). Constructs removed in AGP 9 are gone — `packagingOptions` → `packaging`, `android.kotlinOptions` → `kotlin { compilerOptions }`, `compileSdkVersion(..)` → `compileSdk`. A consuming app on an older AGP should pin `rootProject.ext.compileSdkVersion` and friends as usual; the library reads those before its own defaults.
+- **iOS**: the pod now builds in Swift 6 language mode with `SWIFT_STRICT_CONCURRENCY = complete`.
+- **Node**: `engines.node` is `>=20.19.0` (the floor required by the build tooling).
+
+`minSdkVersion 26` is unchanged since 0.4.0, but it is now documented — see the README for the `expo-build-properties` snippet. Expo defaults apps to 24, which the manifest merger rejects at build time.
+
+### Bug fixes
+
+- **iOS**: `extractWithPassword` reported the wrong `extractedFiles` count and emitted no progress at all. SSZipArchive's unzip `progressHandler` reports a **zero-based** entry index — `currentFileNumber` starts at `-1` and is incremented before the callback — but the code treated it as a count. Two effects: the result was always one lower than reality (`0` for a single-entry archive, despite extraction succeeding), and because neither `count == 1` nor `count == total` ever matched, the throttle suppressed every progress callback on that path. The zip-side handler is *not* zero-based, which is why compression always reported correctly.
+- **iOS**: fixed data races surfaced by migrating to Swift 6 language mode. `NSLock.lock()/unlock()` was called directly from `async` functions at six sites across both task classes — a lock held across a suspension point can be released on a different thread than acquired it. Separately, the progress-throttle timestamp and the extracted-file counter were captured `var`s mutated from SSZipArchive's worker threads and read from the enclosing async function with no synchronisation, and the throttle had a check-then-act window in which two threads could both emit.
+
+### Compatibility
+
+- No changes to the public JS API. `getUnzip()` and the `UnzipTask` / `ZipTask` surface are unchanged.
+- `extractWithPassword` on iOS now reports the counts and progress it always should have. Code that keyed off the previously-wrong `extractedFiles` value will see correct numbers.
+
+### Packaging
+
+- The `exports` map listed `"types"` last. Conditions match in declaration order, so a consumer resolving `import` never reached it and editors fell back to the legacy `types` field. It is now a proper dual-package map with per-condition `import.types` / `require.types`, validated in CI by `@arethetypeswrong/cli` across node10, node16 (CJS and ESM) and bundler resolution.
+- Test type declarations are no longer emitted into `lib/typescript`.
+
+### Test coverage
+
+- Kotlin, Swift and JS unit tests (206 total) now run on every pull request; previously the native suites ran nowhere and `npm test` only ran on tag push.
+- Added Maestro end-to-end flows covering extract, compress and the password round trip on real devices. The JS tests mock the Nitro module and the native suites cover each half in isolation, so these are the only layer exercising the full chain — the iOS progress bug above was invisible to every other test.
+
 ## 0.5.3 — SSZipArchive 2.6.0 API compatibility
 
 ### Bug fixes
