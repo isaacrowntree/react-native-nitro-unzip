@@ -1,11 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
-import * as FileSystem from 'expo-file-system';
+import { Asset } from 'expo-asset';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { Directory, File, Paths } from 'expo-file-system';
 import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,7 +20,33 @@ import {
   type ZipProgress,
 } from 'react-native-nitro-unzip';
 
-type LogEntry = { id: number; text: string; type: 'info' | 'success' | 'error' };
+type LogEntry = {
+  id: number;
+  text: string;
+  type: 'info' | 'success' | 'error';
+};
+
+// The test archive is bundled as a Metro asset (`zip` is in assetExts by
+// default). `Asset.downloadAsync()` copies it out of the APK on Android and
+// resolves to a plain file:// path on both platforms.
+async function resolveBundledZip(): Promise<string> {
+  const asset = Asset.fromModule(require('./assets/test.zip'));
+  if (!asset.localUri) {
+    await asset.downloadAsync();
+  }
+  const uri = asset.localUri ?? asset.uri;
+  if (uri.startsWith('asset://') || uri.startsWith('http')) {
+    // Fall back to an explicit copy if the platform handed back a
+    // non-filesystem URI.
+    const copy = new File(Paths.cache, 'test.zip');
+    if (copy.exists) {
+      copy.delete();
+    }
+    await File.downloadFileAsync(uri, copy);
+    return copy.uri;
+  }
+  return uri;
+}
 
 export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -53,14 +80,19 @@ export default function App() {
       setProgress(0);
       setActiveLabel('Extracting...');
 
-      const zipUri = `${FileSystem.bundleDirectory ?? FileSystem.documentDirectory}assets/test.zip`;
-      const destDir = `${FileSystem.cacheDirectory}extracted/`;
+      // Resolve the bundled archive to a real on-disk file. This matters on
+      // Android, where the asset lives inside the APK under `asset://` and the
+      // native extractor cannot open it; downloadAsync() unpacks it to the
+      // cache and hands back a file:// URI. On iOS it already is a file.
+      const zipUri = await resolveBundledZip();
+      const dest = new Directory(Paths.cache, 'extracted');
 
       // Clean previous extraction
-      const info = await FileSystem.getInfoAsync(destDir);
-      if (info.exists) {
-        await FileSystem.deleteAsync(destDir, { idempotent: true });
+      if (dest.exists) {
+        dest.delete();
       }
+
+      const destDir = dest.uri;
 
       log(`Source: ${zipUri}`);
       log(`Destination: ${destDir}`);
@@ -89,7 +121,7 @@ export default function App() {
       );
 
       // List extracted files
-      const files = await FileSystem.readDirectoryAsync(destDir);
+      const files = dest.list().map((entry) => entry.name);
       log(`Extracted contents: ${files.join(', ')}`, 'success');
     } catch (e: any) {
       setActiveLabel(null);
@@ -104,21 +136,20 @@ export default function App() {
       setActiveLabel('Zipping...');
 
       // Create some files to zip
-      const sourceDir = `${FileSystem.cacheDirectory}zip-source/`;
-      const info = await FileSystem.getInfoAsync(sourceDir);
-      if (info.exists) {
-        await FileSystem.deleteAsync(sourceDir, { idempotent: true });
+      const source = new Directory(Paths.cache, 'zip-source');
+      if (source.exists) {
+        source.delete();
       }
-      await FileSystem.makeDirectoryAsync(sourceDir, { intermediates: true });
+      source.create({ intermediates: true });
 
       for (let i = 0; i < 10; i++) {
-        await FileSystem.writeAsStringAsync(
-          `${sourceDir}file${i}.txt`,
-          `Content of file ${i}\n`.repeat(100),
-        );
+        const file = new File(source, `file${i}.txt`);
+        file.create();
+        file.write(`Content of file ${i}\n`.repeat(100));
       }
 
-      const destZip = `${FileSystem.cacheDirectory}created.zip`;
+      const sourceDir = source.uri;
+      const destZip = new File(Paths.cache, 'created.zip').uri;
 
       log(`Source dir: ${sourceDir}`);
       log(`Output zip: ${destZip}`);
@@ -158,19 +189,26 @@ export default function App() {
       setActiveLabel('Password extract...');
 
       // First create a password-protected zip
-      const sourceDir = `${FileSystem.cacheDirectory}pw-source/`;
-      const info = await FileSystem.getInfoAsync(sourceDir);
-      if (info.exists) {
-        await FileSystem.deleteAsync(sourceDir, { idempotent: true });
+      const source = new Directory(Paths.cache, 'pw-source');
+      if (source.exists) {
+        source.delete();
       }
-      await FileSystem.makeDirectoryAsync(sourceDir, { intermediates: true });
+      source.create({ intermediates: true });
 
-      await FileSystem.writeAsStringAsync(
-        `${sourceDir}secret.txt`,
-        'This is password-protected content!',
-      );
+      // Three entries, not one: a single-entry archive only exercises the
+      // first==last boundary of the progress callback, which is exactly where
+      // an off-by-one in the native entry index can hide.
+      const secret = new File(source, 'secret.txt');
+      secret.create();
+      secret.write('This is password-protected content!');
+      for (let i = 1; i <= 2; i++) {
+        const extra = new File(source, `secret-${i}.txt`);
+        extra.create();
+        extra.write(`Additional protected file ${i}\n`.repeat(20));
+      }
 
-      const pwZip = `${FileSystem.cacheDirectory}protected.zip`;
+      const sourceDir = source.uri;
+      const pwZip = new File(Paths.cache, 'protected.zip').uri;
       const unzip = getUnzip();
 
       log('Creating password-protected zip...');
@@ -179,18 +217,25 @@ export default function App() {
       log(`Created protected zip: ${zipResult.compressedFiles} files`, 'info');
 
       // Now extract it
-      const extractDir = `${FileSystem.cacheDirectory}pw-extracted/`;
-      const extractInfo = await FileSystem.getInfoAsync(extractDir);
-      if (extractInfo.exists) {
-        await FileSystem.deleteAsync(extractDir, { idempotent: true });
+      const pwDest = new Directory(Paths.cache, 'pw-extracted');
+      if (pwDest.exists) {
+        pwDest.delete();
       }
+      const extractDir = pwDest.uri;
 
       log('Extracting with password...');
       const task = unzip.extractWithPassword(pwZip, extractDir, 'test123');
       activeTask.current = task;
 
+      // Log progress here too, matching the plain extract flow. Without a
+      // visible line this path's progress callbacks cannot be asserted in the
+      // E2E flows — and a silently-suppressed callback is exactly the failure
+      // mode the zero-based-index bug produced on iOS.
       task.onProgress((p: UnzipProgress) => {
         setProgress(p.progress);
+        log(
+          `${p.extractedFiles}/${p.totalFiles} files — ${(p.progress * 100).toFixed(0)}%`,
+        );
       });
 
       const result = await task.await();
@@ -204,9 +249,7 @@ export default function App() {
       );
 
       // Verify contents
-      const content = await FileSystem.readAsStringAsync(
-        `${extractDir}secret.txt`,
-      );
+      const content = await new File(pwDest, 'secret.txt').text();
       log(`Verified content: "${content.substring(0, 40)}..."`, 'success');
     } catch (e: any) {
       setActiveLabel(null);
@@ -215,63 +258,65 @@ export default function App() {
   }, [log]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" />
 
-      <Text style={styles.title}>react-native-nitro-unzip</Text>
-      <Text style={styles.subtitle}>
-        {Platform.OS} — Nitro Modules
-      </Text>
+        <Text style={styles.title}>react-native-nitro-unzip</Text>
+        <Text style={styles.subtitle}>{Platform.OS} — Nitro Modules</Text>
 
-      {/* Progress bar */}
-      {progress !== null && (
-        <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
-          <Text style={styles.progressText}>
-            {activeLabel ?? `${(progress * 100).toFixed(0)}%`}
-          </Text>
-        </View>
-      )}
+        {/* Progress bar */}
+        {progress !== null && (
+          <View style={styles.progressContainer}>
+            <View
+              style={[styles.progressBar, { width: `${progress * 100}%` }]}
+            />
+            <Text style={styles.progressText}>
+              {activeLabel ?? `${(progress * 100).toFixed(0)}%`}
+            </Text>
+          </View>
+        )}
 
-      {/* Action buttons */}
-      <View style={styles.buttons}>
-        <Pressable style={styles.button} onPress={handleExtract}>
-          <Text style={styles.buttonText}>Extract ZIP</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={handleZip}>
-          <Text style={styles.buttonText}>Create ZIP</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={handlePasswordExtract}>
-          <Text style={styles.buttonText}>Password</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.button, styles.cancelButton]}
-          onPress={cancel}
-        >
-          <Text style={styles.buttonText}>Cancel</Text>
-        </Pressable>
-      </View>
-
-      <Pressable onPress={clearLogs}>
-        <Text style={styles.clearText}>Clear logs</Text>
-      </Pressable>
-
-      {/* Logs */}
-      <ScrollView style={styles.logs}>
-        {logs.map((entry) => (
-          <Text
-            key={entry.id}
-            style={[
-              styles.logLine,
-              entry.type === 'success' && styles.logSuccess,
-              entry.type === 'error' && styles.logError,
-            ]}
+        {/* Action buttons */}
+        <View style={styles.buttons}>
+          <Pressable style={styles.button} onPress={handleExtract}>
+            <Text style={styles.buttonText}>Extract ZIP</Text>
+          </Pressable>
+          <Pressable style={styles.button} onPress={handleZip}>
+            <Text style={styles.buttonText}>Create ZIP</Text>
+          </Pressable>
+          <Pressable style={styles.button} onPress={handlePasswordExtract}>
+            <Text style={styles.buttonText}>Password</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.button, styles.cancelButton]}
+            onPress={cancel}
           >
-            {entry.text}
-          </Text>
-        ))}
-      </ScrollView>
-    </SafeAreaView>
+            <Text style={styles.buttonText}>Cancel</Text>
+          </Pressable>
+        </View>
+
+        <Pressable onPress={clearLogs}>
+          <Text style={styles.clearText}>Clear logs</Text>
+        </Pressable>
+
+        {/* Logs */}
+        <ScrollView style={styles.logs}>
+          {logs.map((entry) => (
+            <Text
+              key={entry.id}
+              style={[
+                styles.logLine,
+                entry.type === 'success' && styles.logSuccess,
+                entry.type === 'error' && styles.logError,
+              ]}
+            >
+              {entry.text}
+            </Text>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -304,7 +349,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   progressBar: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#4a90d9',
     borderRadius: 6,
   },

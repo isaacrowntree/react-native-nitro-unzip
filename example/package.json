@@ -4,22 +4,26 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "prebuild": "expo prebuild --clean"
   },
   "dependencies": {
-    "expo": "~55.0.3",
-    "expo-file-system": "~55.0.9",
-    "expo-status-bar": "~55.0.4",
-    "react": "19.2.0",
-    "react-native": "0.83.2",
-    "react-native-nitro-modules": "^0.34.0",
-    "react-native-nitro-unzip": "file:.."
+    "expo": "~57.0.15",
+    "expo-asset": "~57.0.13",
+    "expo-build-properties": "~57.0.13",
+    "expo-file-system": "~57.0.5",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-nitro-modules": "^0.37.0",
+    "react-native-nitro-unzip": "file:..",
+    "react-native-safe-area-context": "~5.7.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.3"
   },
   "private": true
 }
