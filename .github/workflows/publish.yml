@@ -13,11 +13,12 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: '.nvmrc'
+          cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install npm with Trusted Publishing support
@@ -25,6 +26,12 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run typescript
+      - run: npm run lint-ci
+      - run: npm run format-ci
       - run: npm test
+
+      - run: npm run prepare
+      - run: npm run check-exports
 
       - run: npm publish --provenance --access public

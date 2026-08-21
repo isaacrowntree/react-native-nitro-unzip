@@ -18,25 +18,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'
+          cache: 'npm'
 
       - name: Install root dependencies
-        run: npm install
+        # Docs only need typedoc to read src/ — skip the example workspace
+        # (Expo + RN, hundreds of MB) and the prepare -> bob build lifecycle.
+        run: npm ci --workspaces=false --ignore-scripts
 
       - name: Install docs dependencies
         working-directory: docs
-        run: npm install
+        run: npm ci
 
       - name: Build docs
         working-directory: docs
         run: npm run build
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs/build
 
@@ -49,4 +52,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,42 @@
+version: 2
+updates:
+  # Library toolchain. Grouped so a routine bump is one PR, not fifteen.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      eslint:
+        patterns: ['eslint', 'eslint-*', '@eslint/*', 'typescript-eslint', 'prettier']
+      jest:
+        patterns: ['jest', 'babel-jest', '@types/jest', '@babel/*']
+      build:
+        patterns: ['react-native-builder-bob', 'release-it', '@release-it/*']
+    ignore:
+      # nitrogen and react-native-nitro-modules must move together and require
+      # regenerating nitrogen/generated — never an unattended bump.
+      - dependency-name: 'nitrogen'
+      - dependency-name: 'react-native-nitro-modules'
+
+  - package-ecosystem: npm
+    directory: /docs
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      docusaurus:
+        patterns: ['@docusaurus/*', 'docusaurus-*', 'typedoc', 'typedoc-*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  # No gradle ecosystem block: every Android version is an interpolated lookup
+  # against android/gradle.properties, which Dependabot's Gradle updater does
+  # not resolve. Those pins are reviewed by hand against the react-native and
+  # react-native-nitro-modules releases they track.

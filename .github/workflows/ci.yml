@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to a PR makes the in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  javascript:
+    name: JS (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 20.19 is the floor declared in package.json#engines; 24 is .nvmrc.
+        # Without the lower leg the declared minimum is never exercised.
+        node: ['20.19', '24']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typescript
+      - name: Lint
+        run: npm run lint-ci
+      - name: Formatting
+        run: npm run format-ci
+      - name: Unit tests
+        run: npm test
+
+      - name: Build package
+        run: npm run prepare
+      # Guards the exports map against the "types last" / dual-package
+      # resolution bugs that silently break consumers' editors.
+      - name: Validate published types
+        run: npm run check-exports
+
+  example:
+    name: Example app (typecheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm ci --prefix example
+      # Catches Expo/RN SDK drift breaking the example's API usage.
+      - run: npm run typescript:example
+
+  android:
+    name: Android (Kotlin unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v5
+      - uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: 'platforms;android-36 build-tools;36.0.0 ndk;27.1.12297006'
+
+      - run: npm ci
+      # The example is deliberately NOT an npm workspace: hoisting the
+      # library's babel/jest devDependencies into the app shadows the versions
+      # Expo's Metro expects and breaks bundling. It installs on its own.
+      - run: npm ci --prefix example
+
+      # The library depends on project(":react-native-nitro-modules"), so its
+      # Gradle project only exists inside a real app. Prebuild generates one.
+      - name: Generate example native project
+        run: npm run prebuild:example
+
+      - name: Run library unit tests
+        run: ./gradlew :react-native-nitro-unzip:test --console=plain
+        working-directory: example/android
+
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: android-test-report
+          path: android/build/reports/
+
+  ios:
+    name: iOS (Swift unit tests)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      # Package.swift builds the pure-Swift security core (UnzipError,
+      # ExtractionScope, PartialExtractionRollback) in Swift 6 language mode
+      # without needing CocoaPods or the Nitro toolchain.
+      - name: Run Swift tests
+        run: swift test
